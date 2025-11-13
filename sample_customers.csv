@@ -1,0 +1,6 @@
+customer_id,name,address,package,start_date,next_due_date,phone_whatsapp,wifi_id,status,notes
+CUST-001,Budi Santoso,Jl. Merdeka No. 123 Jakarta Pusat,Premium 100Mbps,2025-01-01,2025-02-01,628123456789,WIFI-12345,active,Pelanggan setia
+CUST-002,Siti Nurhaliza,Jl. Sudirman No. 456 Jakarta Selatan,Basic 50Mbps,2025-01-05,2025-02-05,628987654321,WIFI-12346,active,
+CUST-003,Ahmad Dahlan,Jl. Thamrin No. 789 Jakarta Barat,Ultra 200Mbps,2025-01-10,2025-02-10,628111222333,WIFI-12347,active,Upgrade dari basic
+CUST-004,Dewi Lestari,Jl. Gatot Subroto No. 321 Jakarta Timur,Premium 100Mbps,2024-12-15,2025-01-15,628444555666,WIFI-12348,suspended,Pending payment
+CUST-005,Rudi Hartono,Jl. Rasuna Said No. 654 Jakarta Selatan,Basic 50Mbps,2025-01-20,2025-02-20,628777888999,WIFI-12349,active,New customer
