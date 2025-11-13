@@ -1,0 +1,146 @@
+import PDFDocument from "pdfkit";
+
+export const generateInvoicePDF = invoice => {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({margin: 50});
+            const buffers = [];
+
+            doc.on("data", buffers.push.bind(buffers));
+            doc.on("end", () => resolve(Buffer.concat(buffers)));
+            doc.on("error", reject);
+
+            // Company Header
+            doc.fontSize(24).font("Helvetica-Bold").text("INVOICE", {align: "center"});
+
+            doc.moveDown(0.5);
+
+            // Company Info
+            doc.fontSize(10)
+                .font("Helvetica")
+                .text(process.env.INVOICE_COMPANY_NAME || "WiFi Angkasa", {align: "center"})
+                .text(process.env.INVOICE_COMPANY_ADDRESS || "Jl. Example, Bekasi", {align: "center"})
+                .text(process.env.INVOICE_COMPANY_PHONE || "62812345678", {align: "center"})
+                .text(process.env.INVOICE_COMPANY_EMAIL || "info@wifiangkasa.com", {align: "center"});
+
+            doc.moveDown(1);
+
+            // Invoice Details
+            const startX = 50;
+            const col1 = startX;
+            const col2 = startX + 250;
+
+            doc.fontSize(10).font("Helvetica-Bold").text("INVOICE DETAILS", col1, doc.y);
+
+            doc.moveDown(0.3);
+
+            doc.fontSize(9)
+                .font("Helvetica")
+                .text(`Invoice No: ${invoice.invoice_number}`, col1)
+                .text(`Date: ${new Date().toLocaleDateString("id-ID")}`)
+                .text(`Due Date: ${invoice.due_date.toLocaleDateString("id-ID")}`);
+
+            // Customer Details
+            doc.fontSize(10)
+                .font("Helvetica-Bold")
+                .text("BILL TO", col1, doc.y + 15);
+
+            doc.fontSize(9)
+                .font("Helvetica")
+                .text(`Name: ${invoice.customer_name}`, col1)
+                .text(`Phone: ${invoice.customer_phone}`)
+                .text(`Package: ${invoice.package}`);
+
+            // Period
+            doc.fontSize(10)
+                .font("Helvetica-Bold")
+                .text("BILLING PERIOD", col2, doc.y - 30);
+
+            doc.fontSize(9)
+                .font("Helvetica")
+                .text(`Start: ${invoice.period_start.toLocaleDateString("id-ID")}`, col2)
+                .text(`End: ${invoice.period_end.toLocaleDateString("id-ID")}`);
+
+            doc.moveDown(1.5);
+
+            // Items Table
+            const tableTop = doc.y;
+            const col1Width = 250;
+            const col2Width = 100;
+            const col3Width = 100;
+
+            // Table Header
+            doc.fontSize(10)
+                .font("Helvetica-Bold")
+                .text("Description", col1, tableTop)
+                .text("Amount", col2, tableTop, {width: col2Width, align: "right"})
+                .text("", col3, tableTop, {width: col3Width, align: "right"});
+
+            doc.moveTo(col1, tableTop + 15)
+                .lineTo(550, tableTop + 15)
+                .stroke();
+
+            // Items
+            doc.fontSize(9)
+                .font("Helvetica")
+                .text(`WiFi ${invoice.package}`, col1, tableTop + 20)
+                .text(`Rp ${invoice.amount.toLocaleString("id-ID")}`, col2, tableTop + 20, {
+                    width: col2Width,
+                    align: "right"
+                });
+
+            // Subtotal
+            let lineY = tableTop + 40;
+            doc.moveTo(col1, lineY).lineTo(550, lineY).stroke();
+
+            doc.fontSize(9).font("Helvetica");
+
+            lineY += 10;
+
+            if (invoice.tax > 0) {
+                doc.text("Subtotal", col1, lineY).text(`Rp ${invoice.amount.toLocaleString("id-ID")}`, col2, lineY, {
+                    width: col2Width,
+                    align: "right"
+                });
+
+                lineY += 20;
+
+                doc.text("Tax", col1, lineY).text(`Rp ${invoice.tax.toLocaleString("id-ID")}`, col2, lineY, {
+                    width: col2Width,
+                    align: "right"
+                });
+
+                lineY += 20;
+            }
+
+            // Total
+            doc.font("Helvetica-Bold")
+                .fontSize(11)
+                .text("TOTAL", col1, lineY)
+                .text(`Rp ${invoice.total_amount.toLocaleString("id-ID")}`, col2, lineY, {
+                    width: col2Width,
+                    align: "right"
+                });
+
+            // Notes
+            doc.moveDown(2);
+            doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+
+            doc.fontSize(9)
+                .font("Helvetica-Bold")
+                .text("Notes:")
+                .font("Helvetica")
+                .text(invoice.notes || "Terima kasih telah menggunakan layanan kami.");
+
+            // Footer
+            doc.fontSize(8)
+                .font("Helvetica")
+                .text("Generated by WiFi Billing System", 50, doc.page.height - 50, {align: "center"})
+                .text(`${new Date().toLocaleString("id-ID")}`, 50, doc.page.height - 35, {align: "center"});
+
+            doc.end();
+        } catch (error) {
+            reject(error);
+        }
+    });
+};

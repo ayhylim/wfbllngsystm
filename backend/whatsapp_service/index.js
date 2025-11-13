@@ -82,7 +82,8 @@ app.get("/status", (req, res) => {
     res.json({
         status: connectionStatus,
         connected: isConnected,
-        qr_available: !!qrCodeData
+        qr_available: !!qrCodeData,
+        phone: sock?.user?.id ? sock.user.id.split("@")[0] : null
     });
 });
 
