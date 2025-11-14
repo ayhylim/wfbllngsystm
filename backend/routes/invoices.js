@@ -3,11 +3,12 @@ import Invoice from "../models/Invoice.js";
 import Customer from "../models/Customer.js";
 import InvoiceTemplate from "../models/InvoiceTemplate.js";
 import {asyncHandler} from "../middleware/errorHandler.js";
-import {generateInvoicePDF} from "../utils/pdfGenerator.js";
+import {generateInvoicePDF, savePDFToDisk} from "../utils/pdfGenerator.js";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
 import {fileURLToPath} from "url";
+import FormData from "form-data";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,56 +24,57 @@ const generateInvoiceNumber = async () => {
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
 
-    // Count today's invoices
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-
-    const count = await Invoice.countDocuments({
-        createdAt: {$gte: startOfDay, $lte: endOfDay}
-    });
-
     // Generate random hex
     const random = Math.random().toString(36).substring(2, 10).toUpperCase();
 
     return `INV-${year}${month}${day}-${random}`;
 };
 
-// GET semua invoices + filter
+// GET all invoices
 router.get(
     "/",
     asyncHandler(async (req, res) => {
-        const {customer_id, status, page = 1, limit = 100, start_date, end_date} = req.query;
+        try {
+            const {customer_id, status, page = 1, limit = 100, start_date, end_date} = req.query;
 
-        const query = {};
+            const query = {};
 
-        if (customer_id) query.customer_id = customer_id;
-        if (status) query.status = status;
+            if (customer_id) query.customer_id = customer_id;
+            if (status) query.status = status;
 
-        if (start_date || end_date) {
-            query.createdAt = {};
-            if (start_date) query.createdAt.$gte = new Date(start_date);
-            if (end_date) query.createdAt.$lte = new Date(end_date);
+            if (start_date || end_date) {
+                query.createdAt = {};
+                if (start_date) query.createdAt.$gte = new Date(start_date);
+                if (end_date) query.createdAt.$lte = new Date(end_date);
+            }
+
+            const skip = (page - 1) * limit;
+
+            const invoices = await Invoice.find(query)
+                .populate("customer_id")
+                .sort({createdAt: -1})
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(); // Use lean() untuk performance
+
+            const total = await Invoice.countDocuments(query);
+
+            console.log(`✅ Fetched ${invoices.length} invoices`);
+
+            res.json({
+                data: invoices,
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / limit)
+            });
+        } catch (error) {
+            console.error("❌ GET /invoices error:", error);
+            res.status(500).json({
+                error: "Gagal mengambil data invoice",
+                details: error.message
+            });
         }
-
-        const skip = (page - 1) * limit;
-
-        const invoices = await Invoice.find(query)
-            .populate("customer_id")
-            .sort({createdAt: -1})
-            .skip(skip)
-            .limit(parseInt(limit));
-
-        const total = await Invoice.countDocuments(query);
-
-        console.log(`✅ Fetched ${invoices.length} invoices`);
-
-        res.json({
-            data: invoices,
-            total,
-            page: parseInt(page),
-            limit: parseInt(limit),
-            pages: Math.ceil(total / limit)
-        });
     })
 );
 
@@ -90,7 +92,7 @@ router.get(
     })
 );
 
-// GENERATE invoice (CREATE invoice + PDF + optional send)
+// GENERATE invoice
 router.post(
     "/generate",
     asyncHandler(async (req, res) => {
@@ -130,6 +132,8 @@ router.post(
             due_date: dueDate,
             status: "draft",
             notes: ""
+            // JANGAN set payment_method, sent_via, dll ke null
+            // Biarkan undefined sampai benar-benar diisi
         });
 
         await newInvoice.save();
@@ -138,60 +142,39 @@ router.post(
 
         // Generate PDF
         try {
-            const template = template_id ? await InvoiceTemplate.findById(template_id) : null;
-            const htmlContent = template?.body || null;
-
-            const pdfBuffer = await generateInvoicePDF(newInvoice, customer, htmlContent);
+            console.log("🔄 Generating PDF...");
+            const pdfBuffer = await generateInvoicePDF(newInvoice, customer);
 
             // Save PDF to disk
-            const invoicesDir = path.join(__dirname, "..", "invoices");
-            if (!fs.existsSync(invoicesDir)) {
-                fs.mkdirSync(invoicesDir, {recursive: true});
-            }
-
-            const pdfPath = path.join(invoicesDir, `${invoiceNumber}.pdf`);
-            fs.writeFileSync(pdfPath, pdfBuffer);
+            const pdfPath = await savePDFToDisk(pdfBuffer, invoiceNumber);
 
             newInvoice.pdf_url = `/invoices/${invoiceNumber}.pdf`;
             await newInvoice.save();
 
-            console.log(`✅ PDF generated: ${pdfPath}`);
+            console.log(`✅ PDF saved: ${pdfPath}`);
         } catch (error) {
             console.error("❌ PDF generation failed:", error);
+            return res.status(500).json({
+                error: "Gagal generate PDF",
+                details: error.message
+            });
         }
 
-        // Send via WhatsApp (optional)
+        // Send via WhatsApp if requested
         if (send_whatsapp) {
             try {
-                const message = `
-🧾 *INVOICE TAGIHAN WIFI*
-
-Halo ${customer.name},
-
-📋 Detail Invoice:
-• Invoice No: ${invoiceNumber}
-• Paket: ${customer.package}
-• Jumlah: Rp ${totalAmount.toLocaleString("id-ID")}
-• Jatuh Tempo: ${dueDate.toLocaleDateString("id-ID")}
-
-Silakan lakukan pembayaran sebelum tanggal jatuh tempo.
-
-Terima kasih! 🙏
-                `.trim();
-
-                await axios.post(`${WHATSAPP_SERVICE_URL}/send-message`, {
-                    phone: customer.phone_whatsapp,
-                    message: message
-                });
+                console.log("📤 Sending via WhatsApp...");
+                await sendInvoiceViaWhatsApp(newInvoice, customer);
 
                 newInvoice.status = "sent";
                 newInvoice.sent_at = new Date();
                 newInvoice.sent_via = "whatsapp";
                 await newInvoice.save();
 
-                console.log(`✅ Invoice sent via WhatsApp to ${customer.phone_whatsapp}`);
+                console.log(`✅ Invoice sent via WhatsApp`);
             } catch (error) {
                 console.error("❌ WhatsApp send failed:", error.message);
+                // Don't fail the request, just log the error
             }
         }
 
@@ -225,9 +208,9 @@ router.put(
         if (notes !== undefined) invoice.notes = notes;
 
         // Recalculate total
-        invoice.total_amount = invoice.amount + invoice.tax;
+        invoice.total_amount = invoice.amount + (invoice.tax || 0);
 
-        // Update customer stats
+        // Update customer stats if paid
         if (status === "paid") {
             const customer = await Customer.findById(invoice.customer_id);
             if (customer) {
@@ -262,7 +245,7 @@ router.delete(
 
         // Delete PDF file
         if (invoice.pdf_url) {
-            const pdfPath = path.join(__dirname, "..", invoice.pdf_url);
+            const pdfPath = path.join(__dirname, "..", "invoices", `${invoice.invoice_number}.pdf`);
             if (fs.existsSync(pdfPath)) {
                 fs.unlinkSync(pdfPath);
             }
@@ -292,7 +275,7 @@ router.get(
     })
 );
 
-// SEND via WhatsApp
+// SEND via WhatsApp (single)
 router.post(
     "/send/:id",
     asyncHandler(async (req, res) => {
@@ -304,27 +287,12 @@ router.post(
 
         const customer = invoice.customer_id;
 
+        if (!customer) {
+            return res.status(404).json({error: "Customer tidak ditemukan"});
+        }
+
         try {
-            const message = `
-🧾 *INVOICE TAGIHAN WIFI*
-
-Halo ${customer.name},
-
-📋 Detail Invoice:
-• Invoice No: ${invoice.invoice_number}
-• Paket: ${customer.package}
-• Jumlah: Rp ${invoice.total_amount.toLocaleString("id-ID")}
-• Jatuh Tempo: ${invoice.due_date.toLocaleDateString("id-ID")}
-
-Silakan lakukan pembayaran sebelum tanggal jatuh tempo.
-
-Terima kasih! 🙏
-            `.trim();
-
-            await axios.post(`${WHATSAPP_SERVICE_URL}/send-message`, {
-                phone: customer.phone_whatsapp,
-                message: message
-            });
+            await sendInvoiceViaWhatsApp(invoice, customer);
 
             invoice.status = "sent";
             invoice.sent_at = new Date();
@@ -395,31 +363,20 @@ router.post(
                     due_date: dueDateObj,
                     status: "draft",
                     notes: ""
+                    // JANGAN set payment_method, sent_via, dll ke null
                 });
 
                 await newInvoice.save();
 
+                // Generate PDF
+                const pdfBuffer = await generateInvoicePDF(newInvoice, customer);
+                await savePDFToDisk(pdfBuffer, invoiceNumber);
+
+                newInvoice.pdf_url = `/invoices/${invoiceNumber}.pdf`;
+                await newInvoice.save();
+
                 // Send via WhatsApp
-                const message = `
-🧾 *INVOICE TAGIHAN WIFI*
-
-Halo ${customer.name},
-
-📋 Detail Invoice:
-• Invoice No: ${invoiceNumber}
-• Paket: ${customer.package}
-• Jumlah: Rp ${totalAmount.toLocaleString("id-ID")}
-• Jatuh Tempo: ${dueDateObj.toLocaleDateString("id-ID")}
-
-Silakan lakukan pembayaran sebelum tanggal jatuh tempo.
-
-Terima kasih! 🙏
-                `.trim();
-
-                await axios.post(`${WHATSAPP_SERVICE_URL}/send-message`, {
-                    phone: customer.phone_whatsapp,
-                    message: message
-                });
+                await sendInvoiceViaWhatsApp(newInvoice, customer);
 
                 newInvoice.status = "sent";
                 newInvoice.sent_at = new Date();
@@ -452,5 +409,45 @@ Terima kasih! 🙏
         });
     })
 );
+
+// Helper function to send invoice via WhatsApp
+async function sendInvoiceViaWhatsApp(invoice, customer) {
+    const pdfPath = path.join(__dirname, "..", "invoices", `${invoice.invoice_number}.pdf`);
+
+    if (!fs.existsSync(pdfPath)) {
+        throw new Error("PDF file not found");
+    }
+
+    const message = `
+🧾 *INVOICE TAGIHAN WIFI*
+
+Halo ${customer.name},
+
+📋 Detail Invoice:
+• Invoice No: ${invoice.invoice_number}
+• Paket: ${customer.package}
+• Jumlah: Rp ${invoice.total_amount.toLocaleString("id-ID")}
+• Jatuh Tempo: ${new Date(invoice.due_date).toLocaleDateString("id-ID")}
+
+Silakan lakukan pembayaran sebelum tanggal jatuh tempo.
+
+Terima kasih! 🙏
+    `.trim();
+
+    // Create form data for sending document
+    const formData = new FormData();
+    formData.append("phone", customer.phone_whatsapp);
+    formData.append("caption", message);
+    formData.append("file", fs.createReadStream(pdfPath), {
+        filename: `${invoice.invoice_number}.pdf`,
+        contentType: "application/pdf"
+    });
+
+    // Send to WhatsApp service
+    await axios.post(`${WHATSAPP_SERVICE_URL}/send-document`, formData, {
+        headers: formData.getHeaders(),
+        timeout: 30000
+    });
+}
 
 export default router;

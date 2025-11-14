@@ -9,7 +9,7 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "../
 import {Badge} from "../components/ui/badge";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../components/ui/select";
 import {toast} from "sonner";
-import {Plus, Download, Send, FileText, Users} from "lucide-react";
+import {Plus, Download, Send, FileText, Users, Loader2} from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
 const API = `${BACKEND_URL}/api`;
@@ -21,6 +21,7 @@ export const Invoices = () => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [generating, setGenerating] = useState(false);
     const [formData, setFormData] = useState({
         customer_id: "",
         template_id: "",
@@ -49,7 +50,7 @@ export const Invoices = () => {
             console.log(`✅ Loaded ${response.data.data.length} invoices`);
         } catch (error) {
             console.error("❌ Fetch invoices failed:", error);
-            toast.error("Gagal memuat invoice");
+            toast.error(error.response?.data?.error || "Gagal memuat invoice");
         } finally {
             setLoading(false);
         }
@@ -75,29 +76,46 @@ export const Invoices = () => {
 
     const handleGenerate = async e => {
         e.preventDefault();
-        setLoading(true);
+        setGenerating(true);
+
+        const toastId = toast.loading("Generating invoice & PDF...");
+
         try {
-            const response = await axios.post(`${API}/invoices/generate`, formData);
-            toast.success(`Invoice ${response.data.data.invoice_number} berhasil dibuat`);
+            const response = await axios.post(`${API}/invoices/generate`, formData, {
+                timeout: 60000 // 60 seconds timeout
+            });
+
+            toast.success(`Invoice ${response.data.data.invoice_number} berhasil dibuat!`, {
+                id: toastId
+            });
+
             setDialogOpen(false);
             resetForm();
             fetchInvoices();
         } catch (error) {
-            const errorMsg = error.response?.data?.error || "Gagal generate invoice";
-            toast.error(errorMsg);
-            console.error("❌ Generate error:", error.response?.data);
+            const errorMsg = error.response?.data?.error || error.message || "Gagal generate invoice";
+            toast.error(errorMsg, {id: toastId});
+            console.error("❌ Generate error:", error.response?.data || error.message);
         } finally {
-            setLoading(false);
+            setGenerating(false);
         }
     };
 
     const handleSendWhatsApp = async invoiceId => {
+        const toastId = toast.loading("Mengirim invoice via WhatsApp...");
+
         try {
-            await axios.post(`${API}/invoices/send/${invoiceId}`);
-            toast.success("Invoice berhasil dikirim via WhatsApp");
+            await axios.post(
+                `${API}/invoices/send/${invoiceId}`,
+                {},
+                {
+                    timeout: 30000
+                }
+            );
+            toast.success("Invoice berhasil dikirim via WhatsApp!", {id: toastId});
             fetchInvoices();
         } catch (error) {
-            toast.error(error.response?.data?.error || "Gagal mengirim invoice");
+            toast.error(error.response?.data?.error || "Gagal mengirim invoice", {id: toastId});
         }
     };
 
@@ -107,18 +125,23 @@ export const Invoices = () => {
             toast.error("Pilih minimal 1 pelanggan");
             return;
         }
-        setLoading(true);
+
+        setGenerating(true);
+        const toastId = toast.loading(`Mengirim ke ${bulkFormData.customer_ids.length} pelanggan...`);
+
         try {
-            const response = await axios.post(`${API}/invoices/bulk-send`, bulkFormData);
+            const response = await axios.post(`${API}/invoices/bulk-send`, bulkFormData, {
+                timeout: 120000 // 2 minutes
+            });
             const success = response.data.results.filter(r => r.success).length;
-            toast.success(`${success} invoice berhasil dikirim`);
+            toast.success(`${success} invoice berhasil dikirim!`, {id: toastId});
             setBulkDialogOpen(false);
             resetBulkForm();
             fetchInvoices();
         } catch (error) {
-            toast.error("Gagal mengirim bulk invoice");
+            toast.error(error.response?.data?.error || "Gagal mengirim bulk invoice", {id: toastId});
         } finally {
-            setLoading(false);
+            setGenerating(false);
         }
     };
 
@@ -227,7 +250,10 @@ export const Invoices = () => {
                                                     }}
                                                     data-testid={`bulk-checkbox-${customer._id}`}
                                                 />
-                                                <label htmlFor={`bulk-${customer._id}`} className="text-sm">
+                                                <label
+                                                    htmlFor={`bulk-${customer._id}`}
+                                                    className="text-sm cursor-pointer"
+                                                >
                                                     {customer.name} ({customer.customer_id})
                                                 </label>
                                             </div>
@@ -257,10 +283,17 @@ export const Invoices = () => {
                                 <Button
                                     type="submit"
                                     className="w-full"
-                                    disabled={loading}
+                                    disabled={generating}
                                     data-testid="bulk-submit-button"
                                 >
-                                    {loading ? "Mengirim..." : "Generate & Kirim via WhatsApp"}
+                                    {generating ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Generating & Sending...
+                                        </>
+                                    ) : (
+                                        "Generate & Kirim via WhatsApp"
+                                    )}
                                 </Button>
                             </form>
                         </DialogContent>
@@ -292,6 +325,7 @@ export const Invoices = () => {
                                     <Select
                                         value={formData.customer_id}
                                         onValueChange={value => setFormData({...formData, customer_id: value})}
+                                        required
                                     >
                                         <SelectTrigger data-testid="select-customer">
                                             <SelectValue placeholder="Pilih pelanggan" />
@@ -356,10 +390,17 @@ export const Invoices = () => {
                                 <Button
                                     type="submit"
                                     className="w-full"
-                                    disabled={loading}
+                                    disabled={generating}
                                     data-testid="submit-invoice-button"
                                 >
-                                    {loading ? "Generating..." : "Generate Invoice"}
+                                    {generating ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        "Generate Invoice"
+                                    )}
                                 </Button>
                             </form>
                         </DialogContent>
@@ -377,8 +418,9 @@ export const Invoices = () => {
                 </CardHeader>
                 <CardContent>
                     {loading ? (
-                        <div className="flex justify-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-4 border-sky-500 border-t-transparent"></div>
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-sky-500 mb-4" />
+                            <p className="text-slate-600">Loading invoices...</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">

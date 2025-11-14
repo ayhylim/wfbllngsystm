@@ -62,13 +62,13 @@ const invoiceSchema = new mongoose.Schema(
             index: true
         },
         payment_date: {
-            type: Date,
-            default: null
+            type: Date
+            // REMOVED default: null - undefined is better for optional fields
         },
         payment_method: {
             type: String,
-            enum: ["cash", "transfer", "check", "other"],
-            default: null
+            enum: ["cash", "transfer", "check", "other"]
+            // REMOVED default: null - only set when payment is made
         },
         notes: {
             type: String,
@@ -76,23 +76,23 @@ const invoiceSchema = new mongoose.Schema(
             trim: true
         },
         pdf_url: {
-            type: String,
-            default: null
+            type: String
+            // REMOVED default: null
         },
         sent_at: {
-            type: Date,
-            default: null
+            type: Date
+            // REMOVED default: null
         },
         sent_via: {
             type: String,
-            enum: ["whatsapp", "email", "manual"],
-            default: null
+            enum: ["whatsapp", "email", "manual"]
+            // REMOVED default: null - only set when actually sent
         },
         // Untuk multi-user di future
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: null
+            ref: "User"
+            // REMOVED default: null
         },
         created_by: {
             type: String,
@@ -110,7 +110,7 @@ const invoiceSchema = new mongoose.Schema(
 );
 
 // Index untuk query yang sering
-invoiceSchema.index({customer_id: 1, created_at: -1});
+invoiceSchema.index({customer_id: 1, createdAt: -1});
 invoiceSchema.index({status: 1, due_date: 1});
 invoiceSchema.index({invoice_number: 1});
 

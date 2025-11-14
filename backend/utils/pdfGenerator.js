@@ -1,146 +1,233 @@
 import PDFDocument from "pdfkit";
+import fs from "fs";
+import path from "path";
+import {fileURLToPath} from "url";
 
-export const generateInvoicePDF = invoice => {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Generate Invoice PDF
+ * @param {Object} invoice - Invoice data from MongoDB
+ * @param {Object} customer - Customer data from MongoDB
+ * @returns {Promise<Buffer>} - PDF Buffer
+ */
+export const generateInvoicePDF = (invoice, customer) => {
     return new Promise((resolve, reject) => {
         try {
-            const doc = new PDFDocument({margin: 50});
+            const doc = new PDFDocument({
+                size: "A4",
+                margin: 50
+            });
+
             const buffers = [];
 
+            // Collect PDF chunks
             doc.on("data", buffers.push.bind(buffers));
-            doc.on("end", () => resolve(Buffer.concat(buffers)));
+            doc.on("end", () => {
+                const pdfBuffer = Buffer.concat(buffers);
+                resolve(pdfBuffer);
+            });
             doc.on("error", reject);
 
             // Company Header
-            doc.fontSize(24).font("Helvetica-Bold").text("INVOICE", {align: "center"});
+            doc.fontSize(28).font("Helvetica-Bold").fillColor("#2563eb").text("INVOICE", {align: "center"});
 
             doc.moveDown(0.5);
 
             // Company Info
-            doc.fontSize(10)
+            doc.fontSize(11)
                 .font("Helvetica")
+                .fillColor("#1e40af")
                 .text(process.env.INVOICE_COMPANY_NAME || "WiFi Angkasa", {align: "center"})
+                .fontSize(10)
+                .fillColor("#64748b")
                 .text(process.env.INVOICE_COMPANY_ADDRESS || "Jl. Example, Bekasi", {align: "center"})
                 .text(process.env.INVOICE_COMPANY_PHONE || "62812345678", {align: "center"})
                 .text(process.env.INVOICE_COMPANY_EMAIL || "info@wifiangkasa.com", {align: "center"});
 
+            doc.moveDown(1.5);
+
+            // Horizontal line
+            doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor("#e2e8f0").lineWidth(2).stroke();
+
             doc.moveDown(1);
 
-            // Invoice Details
-            const startX = 50;
-            const col1 = startX;
-            const col2 = startX + 250;
+            // Invoice Details Section
+            const leftCol = 50;
+            const rightCol = 320;
+            const startY = doc.y;
 
-            doc.fontSize(10).font("Helvetica-Bold").text("INVOICE DETAILS", col1, doc.y);
+            // Left Column - Invoice Details
+            doc.fontSize(11).font("Helvetica-Bold").fillColor("#1e293b").text("INVOICE DETAILS", leftCol, startY);
 
             doc.moveDown(0.3);
 
-            doc.fontSize(9)
-                .font("Helvetica")
-                .text(`Invoice No: ${invoice.invoice_number}`, col1)
-                .text(`Date: ${new Date().toLocaleDateString("id-ID")}`)
-                .text(`Due Date: ${invoice.due_date.toLocaleDateString("id-ID")}`);
-
-            // Customer Details
             doc.fontSize(10)
-                .font("Helvetica-Bold")
-                .text("BILL TO", col1, doc.y + 15);
-
-            doc.fontSize(9)
                 .font("Helvetica")
-                .text(`Name: ${invoice.customer_name}`, col1)
-                .text(`Phone: ${invoice.customer_phone}`)
-                .text(`Package: ${invoice.package}`);
+                .fillColor("#475569")
+                .text(`Invoice No: ${invoice.invoice_number}`, leftCol)
+                .text(`Date: ${new Date(invoice.createdAt).toLocaleDateString("id-ID")}`)
+                .text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString("id-ID")}`);
 
-            // Period
+            // Right Column - Customer Details
+            doc.fontSize(11).font("Helvetica-Bold").fillColor("#1e293b").text("BILL TO", rightCol, startY);
+
+            doc.moveDown(0.3);
+
             doc.fontSize(10)
-                .font("Helvetica-Bold")
-                .text("BILLING PERIOD", col2, doc.y - 30);
-
-            doc.fontSize(9)
                 .font("Helvetica")
-                .text(`Start: ${invoice.period_start.toLocaleDateString("id-ID")}`, col2)
-                .text(`End: ${invoice.period_end.toLocaleDateString("id-ID")}`);
+                .fillColor("#475569")
+                .text(`Name: ${customer.name}`, rightCol)
+                .text(`ID: ${customer.customer_id}`)
+                .text(`Phone: ${customer.phone_whatsapp}`)
+                .text(`Address: ${customer.address}`, rightCol, doc.y, {
+                    width: 200,
+                    lineGap: 2
+                });
 
-            doc.moveDown(1.5);
+            doc.moveDown(2);
 
             // Items Table
             const tableTop = doc.y;
-            const col1Width = 250;
-            const col2Width = 100;
-            const col3Width = 100;
+            const itemCol = 50;
+            const descCol = 150;
+            const amountCol = 450;
 
             // Table Header
-            doc.fontSize(10)
+            doc.fontSize(11)
                 .font("Helvetica-Bold")
-                .text("Description", col1, tableTop)
-                .text("Amount", col2, tableTop, {width: col2Width, align: "right"})
-                .text("", col3, tableTop, {width: col3Width, align: "right"});
+                .fillColor("#ffffff")
+                .rect(50, tableTop, 500, 25)
+                .fillAndStroke("#2563eb", "#2563eb");
 
-            doc.moveTo(col1, tableTop + 15)
-                .lineTo(550, tableTop + 15)
-                .stroke();
+            doc.fillColor("#ffffff")
+                .text("Item", itemCol + 10, tableTop + 8)
+                .text("Description", descCol, tableTop + 8)
+                .text("Amount", amountCol, tableTop + 8, {width: 90, align: "right"});
 
-            // Items
-            doc.fontSize(9)
+            // Table Row
+            const rowY = tableTop + 25;
+
+            doc.fontSize(10)
                 .font("Helvetica")
-                .text(`WiFi ${invoice.package}`, col1, tableTop + 20)
-                .text(`Rp ${invoice.amount.toLocaleString("id-ID")}`, col2, tableTop + 20, {
-                    width: col2Width,
+                .fillColor("#1e293b")
+                .text("WiFi Package", itemCol + 10, rowY + 10)
+                .text(`${customer.package} - Monthly`, descCol, rowY + 10)
+                .text(`Rp ${invoice.amount.toLocaleString("id-ID")}`, amountCol, rowY + 10, {
+                    width: 90,
                     align: "right"
                 });
 
-            // Subtotal
-            let lineY = tableTop + 40;
-            doc.moveTo(col1, lineY).lineTo(550, lineY).stroke();
+            // Row border
+            doc.rect(50, rowY, 500, 35).stroke("#e2e8f0");
 
-            doc.fontSize(9).font("Helvetica");
+            doc.moveDown(3);
 
-            lineY += 10;
+            // Totals Section
+            const totalsY = rowY + 50;
 
             if (invoice.tax > 0) {
-                doc.text("Subtotal", col1, lineY).text(`Rp ${invoice.amount.toLocaleString("id-ID")}`, col2, lineY, {
-                    width: col2Width,
-                    align: "right"
-                });
+                doc.fontSize(10)
+                    .font("Helvetica")
+                    .fillColor("#475569")
+                    .text("Subtotal:", amountCol - 80, totalsY)
+                    .text(`Rp ${invoice.amount.toLocaleString("id-ID")}`, amountCol, totalsY, {
+                        width: 90,
+                        align: "right"
+                    });
 
-                lineY += 20;
-
-                doc.text("Tax", col1, lineY).text(`Rp ${invoice.tax.toLocaleString("id-ID")}`, col2, lineY, {
-                    width: col2Width,
-                    align: "right"
-                });
-
-                lineY += 20;
+                doc.text("Tax:", amountCol - 80, totalsY + 20).text(
+                    `Rp ${invoice.tax.toLocaleString("id-ID")}`,
+                    amountCol,
+                    totalsY + 20,
+                    {
+                        width: 90,
+                        align: "right"
+                    }
+                );
             }
 
             // Total
-            doc.font("Helvetica-Bold")
-                .fontSize(11)
-                .text("TOTAL", col1, lineY)
-                .text(`Rp ${invoice.total_amount.toLocaleString("id-ID")}`, col2, lineY, {
-                    width: col2Width,
+            const totalY = invoice.tax > 0 ? totalsY + 50 : totalsY;
+
+            doc.fontSize(12)
+                .font("Helvetica-Bold")
+                .fillColor("#1e293b")
+                .text("TOTAL:", amountCol - 80, totalY)
+                .fontSize(14)
+                .fillColor("#2563eb")
+                .text(`Rp ${invoice.total_amount.toLocaleString("id-ID")}`, amountCol, totalY, {
+                    width: 90,
                     align: "right"
                 });
 
-            // Notes
+            // Horizontal line before footer
             doc.moveDown(2);
-            doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+            doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor("#e2e8f0").lineWidth(1).stroke();
 
+            doc.moveDown(1);
+
+            // Notes Section
+            if (invoice.notes) {
+                doc.fontSize(10).font("Helvetica-Bold").fillColor("#1e293b").text("Notes:");
+
+                doc.fontSize(9).font("Helvetica").fillColor("#64748b").text(invoice.notes, {
+                    width: 500,
+                    lineGap: 2
+                });
+
+                doc.moveDown(1);
+            }
+
+            // Payment Info
             doc.fontSize(9)
-                .font("Helvetica-Bold")
-                .text("Notes:")
                 .font("Helvetica")
-                .text(invoice.notes || "Terima kasih telah menggunakan layanan kami.");
+                .fillColor("#64748b")
+                .text("Thank you for your business! Please make payment before the due date.", {
+                    width: 500,
+                    align: "center"
+                });
 
             // Footer
             doc.fontSize(8)
-                .font("Helvetica")
-                .text("Generated by WiFi Billing System", 50, doc.page.height - 50, {align: "center"})
-                .text(`${new Date().toLocaleString("id-ID")}`, 50, doc.page.height - 35, {align: "center"});
+                .fillColor("#94a3b8")
+                .text(
+                    `Generated by WiFi Billing System | ${new Date().toLocaleString("id-ID")}`,
+                    50,
+                    doc.page.height - 50,
+                    {
+                        align: "center",
+                        width: 500
+                    }
+                );
 
+            // Finalize PDF
             doc.end();
         } catch (error) {
             reject(error);
         }
     });
+};
+
+/**
+ * Save PDF to disk
+ * @param {Buffer} pdfBuffer - PDF Buffer
+ * @param {String} invoiceNumber - Invoice Number
+ * @returns {Promise<String>} - File path
+ */
+export const savePDFToDisk = async (pdfBuffer, invoiceNumber) => {
+    const invoicesDir = path.join(__dirname, "..", "invoices");
+
+    // Create directory if not exists
+    if (!fs.existsSync(invoicesDir)) {
+        fs.mkdirSync(invoicesDir, {recursive: true});
+    }
+
+    const pdfPath = path.join(invoicesDir, `${invoiceNumber}.pdf`);
+
+    // Write buffer to file
+    fs.writeFileSync(pdfPath, pdfBuffer);
+
+    return pdfPath;
 };

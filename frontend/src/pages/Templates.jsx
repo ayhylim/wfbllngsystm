@@ -7,7 +7,7 @@ import {Label} from "../components/ui/label";
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from "../components/ui/dialog";
 import {Badge} from "../components/ui/badge";
 import {toast} from "sonner";
-import {Plus, Eye, Trash2, Star} from "lucide-react";
+import {Plus, Eye, Trash2, Star, ExternalLink} from "lucide-react";
 import {Textarea} from "../components/ui/textarea";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
@@ -18,7 +18,7 @@ const defaultTemplateHTML = `<!DOCTYPE html>
 <head>
     <meta charset='UTF-8'>
     <style>
-        body { font-family: Arial, sans-serif; padding: 40px; }
+        body { font-family: Arial, sans-serif; padding: 40px; background: white; }
         .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
         .company { font-size: 24px; font-weight: bold; color: #1e40af; }
         .invoice-title { font-size: 32px; color: #2563eb; margin-top: 10px; }
@@ -85,6 +85,7 @@ export const Templates = () => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewContent, setPreviewContent] = useState("");
+    const [previewInNewTab, setPreviewInNewTab] = useState(false);
     const [formData, setFormData] = useState({
         name: "",
         html_content: defaultTemplateHTML,
@@ -138,21 +139,49 @@ export const Templates = () => {
         }
     };
 
-    const handlePreview = content => {
-        // Replace placeholders with sample data
-        let preview = content
-            .replace(/{{name}}/g, "John Doe")
-            .replace(/{{customer_id}}/g, "CUST-001")
-            .replace(/{{address}}/g, "Jl. Contoh No. 123, Jakarta")
-            .replace(/{{package}}/g, "Premium 100Mbps")
-            .replace(/{{wifi_id}}/g, "WIFI-12345")
-            .replace(/{{amount}}/g, "Rp 500,000")
-            .replace(/{{due_date}}/g, "31/12/2025")
-            .replace(/{{invoice_number}}/g, "INV-20250101-ABC123")
-            .replace(/{{date}}/g, new Date().toLocaleDateString("id-ID"));
+    // IMPROVED PREVIEW: Replace placeholders with mock data
+    const generatePreviewHTML = content => {
+        return content
+            .replace(/\{\{name\}\}/g, "John Doe")
+            .replace(/\{\{customer_id\}\}/g, "CUST-001")
+            .replace(/\{\{address\}\}/g, "Jl. Contoh No. 123, Jakarta Selatan")
+            .replace(/\{\{package\}\}/g, "Premium 100Mbps")
+            .replace(/\{\{wifi_id\}\}/g, "WIFI-12345")
+            .replace(/\{\{amount\}\}/g, "Rp 500,000")
+            .replace(/\{\{due_date\}\}/g, "31 Desember 2025")
+            .replace(/\{\{invoice_number\}\}/g, "INV-20251114-SAMPLE")
+            .replace(
+                /\{\{date\}\}/g,
+                new Date().toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric"
+                })
+            );
+    };
 
-        setPreviewContent(preview);
+    // Preview in Dialog
+    const handlePreview = content => {
+        const previewHTML = generatePreviewHTML(content);
+        setPreviewContent(previewHTML);
         setPreviewOpen(true);
+    };
+
+    // Preview in New Tab (RECOMMENDED - Full HTML rendering)
+    const handlePreviewInNewTab = content => {
+        const previewHTML = generatePreviewHTML(content);
+
+        // Open in new tab/window
+        const previewWindow = window.open("", "_blank");
+
+        if (previewWindow) {
+            previewWindow.document.write(previewHTML);
+            previewWindow.document.close();
+
+            toast.success("Preview dibuka di tab baru");
+        } else {
+            toast.error("Popup blocked! Izinkan popup untuk preview");
+        }
     };
 
     const resetForm = () => {
@@ -207,8 +236,15 @@ export const Templates = () => {
                             <div>
                                 <Label>HTML Content *</Label>
                                 <p className="text-xs text-slate-500 mb-2">
-                                    Gunakan placeholder: name, customer_id, address, package, wifi_id, amount, due_date,
-                                    invoice_number, date (format: {"{{"}placeholder{"}}"}})
+                                    Gunakan placeholder: <code className="bg-slate-100 px-1 rounded">{"{{name}}"}</code>
+                                    , <code className="bg-slate-100 px-1 rounded">{"{{customer_id}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{address}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{package}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{wifi_id}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{amount}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{due_date}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{invoice_number}}"}</code>,{" "}
+                                    <code className="bg-slate-100 px-1 rounded">{"{{date}}"}</code>
                                 </p>
                                 <Textarea
                                     required
@@ -233,11 +269,22 @@ export const Templates = () => {
                                 <Button
                                     type="button"
                                     variant="outline"
+                                    onClick={() => handlePreviewInNewTab(formData.html_content)}
+                                    data-testid="preview-new-tab-button"
+                                    className="gap-2"
+                                >
+                                    <ExternalLink size={16} />
+                                    Preview (New Tab)
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
                                     onClick={() => handlePreview(formData.html_content)}
                                     data-testid="preview-button"
+                                    className="gap-2"
                                 >
-                                    <Eye size={16} className="mr-2" />
-                                    Preview
+                                    <Eye size={16} />
+                                    Preview (Dialog)
                                 </Button>
                                 <Button
                                     type="submit"
@@ -287,15 +334,26 @@ export const Templates = () => {
                                     <div className="flex gap-2">
                                         <Button
                                             variant="outline"
-                                            className="flex-1"
-                                            onClick={() => handlePreview(template.body)}
-                                            data-testid={`preview-${template._id}`}
+                                            size="sm"
+                                            onClick={() => handlePreviewInNewTab(template.body)}
+                                            data-testid={`preview-new-tab-${template._id}`}
+                                            className="flex-1 gap-1"
                                         >
-                                            <Eye size={14} className="mr-1" />
+                                            <ExternalLink size={14} />
                                             Preview
                                         </Button>
                                         <Button
                                             variant="outline"
+                                            size="sm"
+                                            onClick={() => handlePreview(template.body)}
+                                            data-testid={`preview-dialog-${template._id}`}
+                                            className="gap-1"
+                                        >
+                                            <Eye size={14} />
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
                                             className="text-rose-600 hover:text-rose-700"
                                             onClick={() => handleDelete(template._id)}
                                             data-testid={`delete-${template._id}`}
@@ -320,16 +378,54 @@ export const Templates = () => {
                 </Card>
             )}
 
-            {/* Preview Dialog */}
+            {/* Preview Dialog - WITH IMPROVED RENDERING */}
             <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="preview-dialog">
+                <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden" data-testid="preview-dialog">
                     <DialogHeader>
-                        <DialogTitle>Preview Template</DialogTitle>
+                        <DialogTitle className="flex items-center justify-between">
+                            <span>Preview Template</span>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    handlePreviewInNewTab(
+                                        previewContent
+                                            .replace(/John Doe/g, "{{name}}")
+                                            .replace(/CUST-001/g, "{{customer_id}}")
+                                            .replace(/Jl\. Contoh No\. 123, Jakarta Selatan/g, "{{address}}")
+                                            .replace(/Premium 100Mbps/g, "{{package}}")
+                                            .replace(/WIFI-12345/g, "{{wifi_id}}")
+                                            .replace(/Rp 500,000/g, "{{amount}}")
+                                            .replace(/31 Desember 2025/g, "{{due_date}}")
+                                            .replace(/INV-20251114-SAMPLE/g, "{{invoice_number}}")
+                                    );
+                                }}
+                                className="gap-2"
+                            >
+                                <ExternalLink size={14} />
+                                Open in New Tab
+                            </Button>
+                        </DialogTitle>
                     </DialogHeader>
-                    <div
-                        className="border rounded-lg p-4 bg-white"
-                        dangerouslySetInnerHTML={{__html: previewContent}}
-                    />
+
+                    {/* IMPROVED: Use iframe for better HTML rendering */}
+                    <div className="border rounded-lg overflow-hidden bg-white" style={{height: "70vh"}}>
+                        <iframe
+                            srcDoc={previewContent}
+                            title="Template Preview"
+                            className="w-full h-full"
+                            style={{
+                                border: "none",
+                                backgroundColor: "white"
+                            }}
+                            sandbox="allow-same-origin"
+                        />
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                        <strong>💡 Tips:</strong> Untuk preview yang lebih akurat, gunakan tombol "Preview (New Tab)"
+                        atau "Open in New Tab" di atas. Preview ini menggunakan data mock untuk placeholder.
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>
