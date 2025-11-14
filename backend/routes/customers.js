@@ -13,7 +13,7 @@ const upload = multer({dest: "uploads/"});
 router.get(
     "/",
     asyncHandler(async (req, res) => {
-        const {q, status, page = 1, limit = 10} = req.query;
+        const {q, status, page = 1, limit = 100} = req.query;
 
         const query = {};
 
@@ -34,9 +34,11 @@ router.get(
 
         const skip = (page - 1) * limit;
 
-        const customers = await Customer.find(query).sort({created_at: -1}).skip(skip).limit(parseInt(limit));
+        const customers = await Customer.find(query).sort({createdAt: -1}).skip(skip).limit(parseInt(limit));
 
         const total = await Customer.countDocuments(query);
+
+        console.log(`✅ Fetched ${customers.length} customers`);
 
         res.json({
             data: customers,
@@ -79,9 +81,25 @@ router.post(
             notes
         } = req.body;
 
+        console.log("📝 Creating customer:", {customer_id, name, wifi_id});
+
         // Validasi required fields
         if (!customer_id || !name || !address || !pkg || !wifi_id || !start_date || !next_due_date || !phone_whatsapp) {
-            return res.status(400).json({error: "Semua field wajib diisi"});
+            return res.status(400).json({
+                error: "Semua field wajib diisi",
+                missing: {customer_id, name, address, pkg, wifi_id, start_date, next_due_date, phone_whatsapp}
+            });
+        }
+
+        // Check duplicate
+        const existingCustomer = await Customer.findOne({
+            $or: [{customer_id}, {wifi_id}]
+        });
+
+        if (existingCustomer) {
+            return res.status(409).json({
+                error: "Customer ID atau WiFi ID sudah terdaftar"
+            });
         }
 
         const newCustomer = new Customer({
@@ -98,6 +116,8 @@ router.post(
         });
 
         await newCustomer.save();
+
+        console.log(`✅ Customer created: ${newCustomer._id}`);
 
         res.status(201).json({
             message: "Customer berhasil ditambah",
@@ -123,6 +143,8 @@ router.put(
             notes
         } = req.body;
 
+        console.log(`📝 Updating customer: ${req.params.id}`);
+
         const customer = await Customer.findById(req.params.id);
 
         if (!customer) {
@@ -130,18 +152,20 @@ router.put(
         }
 
         // Update fields
-        customer.customer_id = customer_id || customer.customer_id;
-        customer.name = name || customer.name;
-        customer.address = address || customer.address;
-        customer.package = pkg || customer.package;
-        customer.wifi_id = wifi_id || customer.wifi_id;
-        customer.start_date = start_date ? new Date(start_date) : customer.start_date;
-        customer.next_due_date = next_due_date ? new Date(next_due_date) : customer.next_due_date;
-        customer.phone_whatsapp = phone_whatsapp || customer.phone_whatsapp;
-        customer.status = status || customer.status;
-        customer.notes = notes !== undefined ? notes : customer.notes;
+        if (customer_id) customer.customer_id = customer_id;
+        if (name) customer.name = name;
+        if (address) customer.address = address;
+        if (pkg) customer.package = pkg;
+        if (wifi_id) customer.wifi_id = wifi_id;
+        if (start_date) customer.start_date = new Date(start_date);
+        if (next_due_date) customer.next_due_date = new Date(next_due_date);
+        if (phone_whatsapp) customer.phone_whatsapp = phone_whatsapp;
+        if (status) customer.status = status;
+        if (notes !== undefined) customer.notes = notes;
 
         await customer.save();
+
+        console.log(`✅ Customer updated: ${customer._id}`);
 
         res.json({
             message: "Customer berhasil diupdate",
@@ -154,11 +178,15 @@ router.put(
 router.delete(
     "/:id",
     asyncHandler(async (req, res) => {
+        console.log(`🗑️ Deleting customer: ${req.params.id}`);
+
         const customer = await Customer.findByIdAndDelete(req.params.id);
 
         if (!customer) {
             return res.status(404).json({error: "Customer tidak ditemukan"});
         }
+
+        console.log(`✅ Customer deleted: ${req.params.id}`);
 
         res.json({message: "Customer berhasil dihapus"});
     })
@@ -198,6 +226,8 @@ router.post(
             } else {
                 return res.status(400).json({error: "Format file tidak didukung (CSV/XLSX saja)"});
             }
+
+            console.log(`📂 Importing ${data.length} rows from ${fileExt}...`);
 
             // Import data
             let imported = 0;
@@ -250,6 +280,8 @@ router.post(
                 }
             }
 
+            console.log(`✅ Imported ${imported}/${data.length} customers`);
+
             res.json({
                 message: `${imported} pelanggan berhasil diimport`,
                 imported,
@@ -257,13 +289,16 @@ router.post(
                 total_rows: data.length
             });
         } catch (error) {
+            console.error("❌ Import error:", error);
             res.status(500).json({
                 error: "Gagal mengimport file",
                 details: error.message
             });
         } finally {
             // Cleanup file
-            fs.unlinkSync(filePath);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
         }
     })
 );

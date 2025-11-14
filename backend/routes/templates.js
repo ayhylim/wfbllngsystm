@@ -10,8 +10,10 @@ router.get(
     asyncHandler(async (req, res) => {
         const templates = await InvoiceTemplate.find({is_active: true}).sort({
             is_default: -1,
-            created_at: -1
+            createdAt: -1
         });
+
+        console.log(`✅ Fetched ${templates.length} templates`);
 
         res.json(templates);
     })
@@ -35,26 +37,31 @@ router.get(
 router.post(
     "/",
     asyncHandler(async (req, res) => {
-        const {name, subject, body, is_default} = req.body;
+        const {name, html_content, is_default} = req.body;
 
-        if (!name || !subject || !body) {
-            return res.status(400).json({error: "name, subject, body wajib diisi"});
+        console.log("📝 Creating template:", name);
+
+        if (!name || !html_content) {
+            return res.status(400).json({error: "name dan html_content wajib diisi"});
         }
 
         // Jika is_default true, unset default lainnya
         if (is_default) {
             await InvoiceTemplate.updateMany({is_default: true}, {is_default: false});
+            console.log("🔄 Unset previous default template");
         }
 
         const newTemplate = new InvoiceTemplate({
             name,
-            subject,
-            body,
+            subject: `Invoice - ${name}`,
+            body: html_content, // Store HTML in body field
             is_default: is_default || false,
             is_active: true
         });
 
         await newTemplate.save();
+
+        console.log(`✅ Template created: ${newTemplate._id}`);
 
         res.status(201).json({
             message: "Template berhasil dibuat",
@@ -67,7 +74,9 @@ router.post(
 router.put(
     "/:id",
     asyncHandler(async (req, res) => {
-        const {name, subject, body, is_default, is_active} = req.body;
+        const {name, html_content, is_default, is_active} = req.body;
+
+        console.log(`📝 Updating template: ${req.params.id}`);
 
         const template = await InvoiceTemplate.findById(req.params.id);
 
@@ -76,18 +85,20 @@ router.put(
         }
 
         // Update fields
-        template.name = name || template.name;
-        template.subject = subject || template.subject;
-        template.body = body || template.body;
-        template.is_active = is_active !== undefined ? is_active : template.is_active;
+        if (name) template.name = name;
+        if (html_content) template.body = html_content;
+        if (is_active !== undefined) template.is_active = is_active;
 
         // Jika set default, unset default lainnya
         if (is_default === true && !template.is_default) {
             await InvoiceTemplate.updateMany({is_default: true}, {is_default: false});
             template.is_default = true;
+            console.log("🔄 Set as new default template");
         }
 
         await template.save();
+
+        console.log(`✅ Template updated: ${template._id}`);
 
         res.json({
             message: "Template berhasil diupdate",
@@ -100,11 +111,15 @@ router.put(
 router.delete(
     "/:id",
     asyncHandler(async (req, res) => {
+        console.log(`🗑️ Deleting template: ${req.params.id}`);
+
         const template = await InvoiceTemplate.findByIdAndDelete(req.params.id);
 
         if (!template) {
             return res.status(404).json({error: "Template tidak ditemukan"});
         }
+
+        console.log(`✅ Template deleted: ${req.params.id}`);
 
         res.json({message: "Template berhasil dihapus"});
     })

@@ -8,14 +8,12 @@ import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from ".
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "../components/ui/table";
 import {Badge} from "../components/ui/badge";
 import {toast} from "sonner";
-import {Plus, Search, Upload, Edit, Trash2, Send} from "lucide-react";
+import {Plus, Search, Upload, Edit, Trash2} from "lucide-react";
 import {Textarea} from "../components/ui/textarea";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../components/ui/select";
-import {apiCall} from "@/lib/api-client";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-// const API = `${BACKEND_URL}/api`; //Before
-const API = `${BACKEND_URL}`;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
+const API = `${BACKEND_URL}/api`;
 
 export const Customers = () => {
     const [customers, setCustomers] = useState([]);
@@ -41,35 +39,26 @@ export const Customers = () => {
         fetchCustomers();
     }, [searchQuery]);
 
-    // Add customer
-    const addCustomer = async formData => {
-        try {
-            const result = await apiCall("/customers", {
-                method: "POST",
-                body: JSON.stringify(formData)
-            });
-            toast.success("Pelanggan berhasil ditambah");
-        } catch (error) {
-            console.error("❌ Add Customer Failed:", error);
-            toast.error("Gagal menambah pelanggan");
-        }
-    };
-
-    // Get customers
     const fetchCustomers = async () => {
         try {
-            const data = await apiCall("/customers?q=" + searchTerm);
-            setCustomers(data);
+            setLoading(true);
+            const response = await axios.get(`${API}/customers?q=${searchQuery}`);
+            setCustomers(response.data.data || []);
+            console.log(`✅ Loaded ${response.data.data.length} customers`);
         } catch (error) {
             console.error("❌ Fetch Customers Failed:", error);
+            toast.error("Gagal memuat data pelanggan");
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleSubmit = async e => {
         e.preventDefault();
         try {
+            setLoading(true);
             if (editingCustomer) {
-                await axios.put(`${API}/customers/${editingCustomer.id}`, formData);
+                await axios.put(`${API}/customers/${editingCustomer._id}`, formData);
                 toast.success("Pelanggan berhasil diupdate");
             } else {
                 await axios.post(`${API}/customers`, formData);
@@ -79,7 +68,11 @@ export const Customers = () => {
             resetForm();
             fetchCustomers();
         } catch (error) {
-            toast.error(error.response?.data?.detail || "Gagal menyimpan data");
+            const errorMsg = error.response?.data?.error || error.message || "Gagal menyimpan data";
+            toast.error(errorMsg);
+            console.error("❌ Submit error:", error.response?.data);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -96,7 +89,18 @@ export const Customers = () => {
 
     const handleEdit = customer => {
         setEditingCustomer(customer);
-        setFormData(customer);
+        setFormData({
+            customer_id: customer.customer_id,
+            name: customer.name,
+            address: customer.address,
+            package: customer.package,
+            start_date: customer.start_date?.split("T")[0] || "",
+            next_due_date: customer.next_due_date?.split("T")[0] || "",
+            phone_whatsapp: customer.phone_whatsapp,
+            wifi_id: customer.wifi_id,
+            status: customer.status,
+            notes: customer.notes || ""
+        });
         setDialogOpen(true);
     };
 
@@ -124,15 +128,21 @@ export const Customers = () => {
         formData.append("file", file);
 
         try {
-            const response = await axios.post(`${API}/customers/import`, formData);
+            setLoading(true);
+            const response = await axios.post(`${API}/customers/import`, formData, {
+                headers: {"Content-Type": "multipart/form-data"}
+            });
             toast.success(`${response.data.imported} pelanggan berhasil diimport`);
             if (response.data.errors.length > 0) {
                 console.log("Import errors:", response.data.errors);
+                toast.warning(`${response.data.errors.length} baris gagal diimport`);
             }
             setImportDialogOpen(false);
             fetchCustomers();
         } catch (error) {
-            toast.error(error.response?.data?.detail || "Gagal import data");
+            toast.error(error.response?.data?.error || "Gagal import data");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -164,6 +174,7 @@ export const Customers = () => {
                                     type="file"
                                     accept=".csv,.xlsx,.xls"
                                     onChange={handleImport}
+                                    disabled={loading}
                                     data-testid="file-input"
                                 />
                             </div>
@@ -298,8 +309,13 @@ export const Customers = () => {
                                         />
                                     </div>
                                 </div>
-                                <Button type="submit" className="w-full" data-testid="submit-customer-button">
-                                    {editingCustomer ? "Update" : "Simpan"} Pelanggan
+                                <Button
+                                    type="submit"
+                                    className="w-full"
+                                    disabled={loading}
+                                    data-testid="submit-customer-button"
+                                >
+                                    {loading ? "Menyimpan..." : editingCustomer ? "Update" : "Simpan"} Pelanggan
                                 </Button>
                             </form>
                         </DialogContent>
@@ -353,13 +369,15 @@ export const Customers = () => {
                                 </TableHeader>
                                 <TableBody>
                                     {customers.map(customer => (
-                                        <TableRow key={customer.id} data-testid={`customer-row-${customer.id}`}>
+                                        <TableRow key={customer._id} data-testid={`customer-row-${customer._id}`}>
                                             <TableCell className="font-mono text-sm">{customer.customer_id}</TableCell>
                                             <TableCell className="font-semibold">{customer.name}</TableCell>
                                             <TableCell>{customer.package}</TableCell>
                                             <TableCell className="font-mono text-sm">{customer.wifi_id}</TableCell>
                                             <TableCell>{customer.phone_whatsapp}</TableCell>
-                                            <TableCell>{customer.next_due_date}</TableCell>
+                                            <TableCell>
+                                                {new Date(customer.next_due_date).toLocaleDateString("id-ID")}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge
                                                     variant={customer.status === "active" ? "default" : "secondary"}
@@ -374,7 +392,7 @@ export const Customers = () => {
                                                         size="sm"
                                                         variant="outline"
                                                         onClick={() => handleEdit(customer)}
-                                                        data-testid={`edit-${customer.id}`}
+                                                        data-testid={`edit-${customer._id}`}
                                                     >
                                                         <Edit size={14} />
                                                     </Button>
@@ -382,8 +400,8 @@ export const Customers = () => {
                                                         size="sm"
                                                         variant="outline"
                                                         className="text-rose-600 hover:text-rose-700"
-                                                        onClick={() => handleDelete(customer.id)}
-                                                        data-testid={`delete-${customer.id}`}
+                                                        onClick={() => handleDelete(customer._id)}
+                                                        data-testid={`delete-${customer._id}`}
                                                     >
                                                         <Trash2 size={14} />
                                                     </Button>
@@ -393,7 +411,7 @@ export const Customers = () => {
                                     ))}
                                 </TableBody>
                             </Table>
-                            {customers.length === 0 && (
+                            {customers.length === 0 && !loading && (
                                 <div className="text-center py-8 text-slate-500">Belum ada data pelanggan</div>
                             )}
                         </div>

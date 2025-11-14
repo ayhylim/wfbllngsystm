@@ -35,8 +35,8 @@ export const WhatsAppSettings = () => {
     // Get WhatsApp Status dengan error handling
     const checkStatus = async () => {
         try {
-            const response = await axios.get(`${API}/status`, {
-                timeout: 5000 // Timeout 5 detik
+            const response = await axios.get(`${API}/api/whatsapp/status`, {
+                timeout: 5000
             });
 
             setStatus(response.data);
@@ -77,7 +77,7 @@ export const WhatsAppSettings = () => {
     // Get QR Code
     const fetchQRCode = async () => {
         try {
-            const response = await axios.get(`${API}/qr`, {
+            const response = await axios.get(`${API}/api/whatsapp/qr`, {
                 timeout: 5000
             });
             if (response.data.qr) {
@@ -94,7 +94,7 @@ export const WhatsAppSettings = () => {
         setLoading(true);
         try {
             await axios.post(
-                `${API}/reconnect`,
+                `${API}/api/whatsapp/reconnect`,
                 {},
                 {
                     timeout: 5000

@@ -1,25 +1,14 @@
 const getEndpoint = path => {
     const baseUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
 
-    // WhatsApp endpoints -> port 8002 (remove /whatsapp prefix)
+    // WhatsApp endpoints -> proxy via backend port 8001
     if (path.startsWith("/whatsapp/")) {
-        const cleanPath = path.replace("/whatsapp", "");
-        console.log(`🔵 WhatsApp Route: ${path} → http://localhost:8002${cleanPath}`);
-        return `http://localhost:8002${cleanPath}`;
+        const endpoint = `${baseUrl}/api${path}`;
+        console.log(`🔵 WhatsApp Route (Proxied): ${path} → ${endpoint}`);
+        return endpoint;
     }
 
-    // Direct WhatsApp routes (backward compatibility)
-    if (
-        path.startsWith("/status") ||
-        path.startsWith("/qr") ||
-        path.startsWith("/reconnect") ||
-        path.startsWith("/logout")
-    ) {
-        console.log(`🔵 WhatsApp Direct Route: http://localhost:8002${path}`);
-        return `http://localhost:8002${path}`;
-    }
-
-    // Regular API endpoints -> port 8001 with /api prefix
+    // Regular API endpoints
     const endpoint = `${baseUrl}/api${path}`;
     console.log(`🟢 API Route: ${path} → ${endpoint}`);
     return endpoint;
@@ -28,14 +17,20 @@ const getEndpoint = path => {
 export const apiCall = async (path, options = {}) => {
     try {
         const endpoint = getEndpoint(path);
+        console.log(`🔵 API Call: ${path} → ${endpoint}`);
+
         const response = await fetch(endpoint, {
-            headers: {"Content-Type": "application/json", ...options.headers},
+            headers: {
+                "Content-Type": "application/json",
+                ...options.headers
+            },
             ...options
         });
 
         if (!response.ok) {
-            console.error(`❌ API Error [${path}]: ${response.status} ${response.statusText}`);
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error(`❌ API Error [${path}]:`, response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         return await response.json();

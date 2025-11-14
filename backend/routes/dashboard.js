@@ -7,10 +7,12 @@ const router = express.Router();
 
 // GET dashboard statistics
 router.get(
-    "/",
+    "/stats",
     asyncHandler(async (req, res) => {
+        console.log("📊 Fetching dashboard stats...");
+
         // Total customers
-        const totalCustomers = await Customer.countDocuments({status: "active"});
+        const totalCustomers = await Customer.countDocuments();
 
         // Active customers
         const activeCustomers = await Customer.countDocuments({status: "active"});
@@ -24,15 +26,19 @@ router.get(
         // Paid invoices
         const paidInvoices = await Invoice.countDocuments({status: "paid"});
 
+        // Sent invoices
+        const sentInvoices = await Invoice.countDocuments({status: "sent"});
+
         // Pending invoices
         const pendingInvoices = await Invoice.countDocuments({
-            status: {$in: ["draft", "sent", "viewed"]}
+            status: {$in: ["draft", "sent"]}
         });
 
         // Overdue invoices
-        const overDueInvoices = await Invoice.countDocuments({
-            status: "overdue",
-            due_date: {$lt: new Date()}
+        const now = new Date();
+        const overdueInvoices = await Invoice.countDocuments({
+            status: {$ne: "paid"},
+            due_date: {$lt: now}
         });
 
         // Revenue (total paid)
@@ -42,70 +48,56 @@ router.get(
         ]);
         const totalRevenue = revenueResult[0]?.total || 0;
 
-        // Monthly revenue
-        const monthlyRevenueResult = await Invoice.aggregate([
-            {$match: {status: "paid"}},
-            {
-                $group: {
-                    _id: {
-                        year: {$year: "$payment_date"},
-                        month: {$month: "$payment_date"}
-                    },
-                    total: {$sum: "$total_amount"}
-                }
-            },
-            {$sort: {"_id.year": 1, "_id.month": 1}},
-            {$limit: 12}
-        ]);
-
-        const monthlyRevenue = monthlyRevenueResult.map(item => ({
-            month: `${item._id.year}-${String(item._id.month).padStart(2, "0")}`,
-            total: item.total
-        }));
-
-        // Status breakdown
-        const statusBreakdown = await Invoice.aggregate([
-            {
-                $group: {
-                    _id: "$status",
-                    count: {$sum: 1},
-                    total_amount: {$sum: "$total_amount"}
-                }
-            }
-        ]);
-
-        // Recent invoices
-        const recentInvoices = await Invoice.find().sort({created_at: -1}).limit(5);
-
-        // Due this month
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-        const dueThisMonth = await Invoice.countDocuments({
-            due_date: {
-                $gte: startOfMonth,
-                $lte: endOfMonth
-            },
-            status: {$ne: "paid"}
-        });
+        console.log(`✅ Dashboard stats calculated`);
 
         res.json({
-            summary: {
-                totalCustomers,
-                activeCustomers,
-                suspendedCustomers,
-                totalInvoices,
-                paidInvoices,
-                pendingInvoices,
-                overDueInvoices,
-                totalRevenue,
-                dueThisMonth
+            customers: {
+                total: totalCustomers,
+                active: activeCustomers,
+                suspended: suspendedCustomers
             },
-            monthlyRevenue,
-            statusBreakdown,
-            recentInvoices
+            invoices: {
+                total: totalInvoices,
+                paid: paidInvoices,
+                sent: sentInvoices,
+                pending: pendingInvoices,
+                overdue: overdueInvoices
+            },
+            revenue: totalRevenue
         });
+    })
+);
+
+// GET overdue invoices
+router.get(
+    "/overdue",
+    asyncHandler(async (req, res) => {
+        console.log("⏰ Fetching overdue invoices...");
+
+        const now = new Date();
+
+        const overdueInvoices = await Invoice.find({
+            status: {$ne: "paid"},
+            due_date: {$lt: now}
+        })
+            .populate("customer_id")
+            .sort({due_date: 1})
+            .limit(50);
+
+        const formatted = overdueInvoices.map(inv => ({
+            id: inv._id,
+            invoice_number: inv.invoice_number,
+            customer_id: inv.customer_id?._id,
+            customer_name: inv.customer_name,
+            amount: inv.total_amount,
+            due_date: inv.due_date.toLocaleDateString("id-ID"),
+            status: inv.status,
+            phone: inv.customer_phone
+        }));
+
+        console.log(`✅ Found ${formatted.length} overdue invoices`);
+
+        res.json(formatted);
     })
 );
 
