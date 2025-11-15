@@ -9,8 +9,9 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "../
 import {Badge} from "../components/ui/badge";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../components/ui/select";
 import {toast} from "sonner";
-import {Plus, Download, Send, FileText, Users, Loader2, Search, Filter, X} from "lucide-react";
+import {Plus, Download, Send, FileText, Users, Loader2, Search, Filter, X, Edit, Trash2} from "lucide-react";
 import {Checkbox} from "../components/ui/checkbox";
+import {SearchableSelect} from "../components/ui/searchable-select";
 import {CurrencyInput, formatRupiah} from "../components/ui/currency-input";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
@@ -21,11 +22,13 @@ export const Invoices = () => {
     const [customers, setCustomers] = useState([]);
     const [templates, setTemplates] = useState([]);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [editingInvoice, setEditingInvoice] = useState(null);
 
-    // ========== SEARCH & FILTER STATES ==========
+    // Search & Filter States
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
     const [filterPaymentMethod, setFilterPaymentMethod] = useState("");
@@ -33,6 +36,7 @@ export const Invoices = () => {
     const [filterDateTo, setFilterDateTo] = useState("");
     const [showFilters, setShowFilters] = useState(false);
 
+    // Generate Invoice Form
     const [formData, setFormData] = useState({
         customer_id: "",
         template_id: "",
@@ -47,6 +51,24 @@ export const Invoices = () => {
         include_installation_cost: false
     });
 
+    // Edit Invoice Form
+    const [editFormData, setEditFormData] = useState({
+        customer_id: "",
+        amount: "",
+        router_cost: "",
+        installation_cost: "",
+        other_fees: "",
+        installation_discount: "",
+        tax: "",
+        status: "",
+        due_date: "",
+        payment_received_date: "",
+        payment_method: "",
+        received_by: "",
+        notes: ""
+    });
+
+    // Bulk Send Form
     const [bulkFormData, setBulkFormData] = useState({
         customer_ids: [],
         template_id: "",
@@ -132,6 +154,57 @@ export const Invoices = () => {
             console.error("❌ Generate error:", error.response?.data || error.message);
         } finally {
             setGenerating(false);
+        }
+    };
+
+    const handleEdit = invoice => {
+        setEditingInvoice(invoice);
+        setEditFormData({
+            customer_id: invoice.customer_id?._id || invoice.customer_id,
+            amount: invoice.amount,
+            router_cost: invoice.router_cost || 0,
+            installation_cost: invoice.installation_cost || 0,
+            other_fees: invoice.other_fees || 0,
+            installation_discount: invoice.installation_discount || 0,
+            tax: invoice.tax || 0,
+            status: invoice.status,
+            due_date: invoice.due_date?.split("T")[0] || "",
+            payment_received_date: invoice.payment_received_date?.split("T")[0] || "",
+            payment_method: invoice.payment_method || "",
+            received_by: invoice.received_by || "",
+            notes: invoice.notes || ""
+        });
+        setEditDialogOpen(true);
+    };
+
+    const handleEditSubmit = async e => {
+        e.preventDefault();
+        setGenerating(true);
+        const toastId = toast.loading("Updating invoice...");
+
+        try {
+            await axios.put(`${API}/invoices/${editingInvoice._id}`, editFormData);
+            toast.success("Invoice berhasil diupdate!", {id: toastId});
+            setEditDialogOpen(false);
+            fetchInvoices();
+        } catch (error) {
+            toast.error(error.response?.data?.error || "Gagal update invoice", {id: toastId});
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const handleDelete = async invoiceId => {
+        if (!window.confirm("Yakin ingin menghapus invoice ini? PDF akan terhapus juga.")) return;
+
+        const toastId = toast.loading("Menghapus invoice...");
+
+        try {
+            await axios.delete(`${API}/invoices/${invoiceId}`);
+            toast.success("Invoice berhasil dihapus!", {id: toastId});
+            fetchInvoices();
+        } catch (error) {
+            toast.error(error.response?.data?.error || "Gagal menghapus invoice", {id: toastId});
         }
     };
 
@@ -363,31 +436,24 @@ export const Invoices = () => {
                             <form onSubmit={handleGenerate} className="space-y-4">
                                 <div>
                                     <Label>Pilih Pelanggan *</Label>
-                                    <Select
+                                    <SearchableSelect
                                         value={formData.customer_id}
                                         onValueChange={value => setFormData({...formData, customer_id: value})}
-                                        required
-                                    >
-                                        <SelectTrigger data-testid="select-customer">
-                                            <SelectValue placeholder="Pilih pelanggan" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {customers.map(customer => (
-                                                <SelectItem key={customer._id} value={customer._id}>
-                                                    {customer.name} - {customer.customer_id}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                        options={customers.map(c => ({
+                                            value: c._id,
+                                            label: `${c.name} - ${c.customer_id}`
+                                        }))}
+                                        placeholder="Pilih pelanggan..."
+                                        searchPlaceholder="Cari nama pelanggan..."
+                                    />
                                 </div>
 
                                 <div>
                                     <Label>Jumlah Tagihan Bulanan (Rp) *</Label>
-                                    <Input
-                                        type="number"
+                                    <CurrencyInput
                                         required
                                         value={formData.amount}
-                                        onChange={e => setFormData({...formData, amount: e.target.value})}
+                                        onChange={value => setFormData({...formData, amount: value})}
                                         data-testid="input-amount"
                                     />
                                 </div>
@@ -679,6 +745,34 @@ export const Invoices = () => {
                                                     )}
                                                 </div>
                                             </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleEdit(invoice)}
+                                                    >
+                                                        <Edit size={14} />
+                                                    </Button>
+                                                    {invoice.status !== "sent" && invoice.status !== "paid" && (
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-green-600"
+                                                            onClick={() => handleSendWhatsApp(invoice._id)}
+                                                        >
+                                                            <Send size={14} />
+                                                        </Button>
+                                                    )}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="text-rose-600"
+                                                        onClick={() => handleDelete(invoice._id)}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -697,6 +791,21 @@ export const Invoices = () => {
                         </div>
                     )}
                 </CardContent>
+                <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Edit Invoice</DialogTitle>
+                        </DialogHeader>
+                        <form onSubmit={handleEditSubmit} className="space-y-4">
+                            {/* Form fields dengan CurrencyInput untuk amount, router_cost, dll */}
+                            {/* SearchableSelect untuk customer */}
+                            {/* Input untuk dates, status, payment details */}
+                            <Button type="submit" className="w-full" disabled={loading}>
+                                Update Invoice
+                            </Button>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </Card>
         </div>
     );

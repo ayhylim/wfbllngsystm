@@ -9,6 +9,13 @@ const invoiceSchema = new mongoose.Schema(
             trim: true,
             index: true
         },
+        payment_receipt_number: {
+            type: String,
+            unique: true,
+            sparse: true,
+            trim: true,
+            index: true
+        },
         customer_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Customer",
@@ -40,6 +47,26 @@ const invoiceSchema = new mongoose.Schema(
             required: true,
             min: 0
         },
+        router_cost: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        installation_cost: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        other_fees: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        installation_discount: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         tax: {
             type: Number,
             default: 0,
@@ -55,20 +82,26 @@ const invoiceSchema = new mongoose.Schema(
             required: true,
             index: true
         },
+        invoice_date: {
+            type: Date,
+            default: Date.now
+        },
         status: {
             type: String,
             enum: ["draft", "sent", "viewed", "paid", "overdue", "cancelled"],
             default: "draft",
             index: true
         },
-        payment_date: {
+        payment_received_date: {
             type: Date
-            // REMOVED default: null - undefined is better for optional fields
         },
         payment_method: {
             type: String,
             enum: ["cash", "transfer", "check", "other"]
-            // REMOVED default: null - only set when payment is made
+        },
+        received_by: {
+            type: String,
+            trim: true
         },
         notes: {
             type: String,
@@ -77,22 +110,17 @@ const invoiceSchema = new mongoose.Schema(
         },
         pdf_url: {
             type: String
-            // REMOVED default: null
         },
         sent_at: {
             type: Date
-            // REMOVED default: null
         },
         sent_via: {
             type: String,
             enum: ["whatsapp", "email", "manual"]
-            // REMOVED default: null - only set when actually sent
         },
-        // Untuk multi-user di future
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User"
-            // REMOVED default: null
         },
         created_by: {
             type: String,
@@ -113,6 +141,7 @@ const invoiceSchema = new mongoose.Schema(
 invoiceSchema.index({customer_id: 1, createdAt: -1});
 invoiceSchema.index({status: 1, due_date: 1});
 invoiceSchema.index({invoice_number: 1});
+invoiceSchema.index({payment_receipt_number: 1});
 
 const Invoice = mongoose.model("Invoice", invoiceSchema);
 

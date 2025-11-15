@@ -1,3 +1,9 @@
+// GUNAKAN FILE INI UNTUK REPLACE frontend/src/pages/Customers.jsx
+// PERUBAHAN UTAMA:
+// 1. Import PhoneInput untuk WhatsApp number
+// 2. Import CurrencyInput untuk financial fields
+// 3. Update form dengan component baru
+
 import React, {useEffect, useState} from "react";
 import axios from "axios";
 import {Card, CardContent, CardHeader, CardTitle} from "../components/ui/card";
@@ -12,6 +18,7 @@ import {Plus, Search, Upload, Edit, Trash2} from "lucide-react";
 import {Textarea} from "../components/ui/textarea";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../components/ui/select";
 import {CurrencyInput, formatRupiah} from "../components/ui/currency-input";
+import {PhoneInput, formatPhoneDisplay} from "../components/ui/phone-input";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
 const API = `${BACKEND_URL}/api`;
@@ -229,7 +236,7 @@ export const Customers = () => {
                                                 {new Date(editingCustomer.last_payment_date).toLocaleDateString(
                                                     "id-ID"
                                                 )}{" "}
-                                                - Rp {editingCustomer.last_payment_amount?.toLocaleString("id-ID")}
+                                                - {formatRupiah(editingCustomer.last_payment_amount)}
                                             </p>
                                         )}
                                     </div>
@@ -295,16 +302,18 @@ export const Customers = () => {
                                             data-testid="input-due-date"
                                         />
                                     </div>
-                                    <div>
+
+                                    {/* PHONE INPUT - UPDATED */}
+                                    <div className="col-span-2">
                                         <Label>No. WhatsApp *</Label>
-                                        <Input
+                                        <PhoneInput
                                             required
                                             value={formData.phone_whatsapp}
-                                            onChange={e => setFormData({...formData, phone_whatsapp: e.target.value})}
-                                            placeholder="628123456789"
+                                            onChange={value => setFormData({...formData, phone_whatsapp: value})}
                                             data-testid="input-phone"
                                         />
                                     </div>
+
                                     <div>
                                         <Label>Status</Label>
                                         <Select
@@ -322,59 +331,46 @@ export const Customers = () => {
                                         </Select>
                                     </div>
 
-                                    {/* ========== NEW FIELDS ========== */}
+                                    {/* CURRENCY INPUTS - UPDATED */}
                                     <div className="col-span-2 border-t pt-4 mt-2">
                                         <h3 className="font-semibold text-slate-800 mb-3">
                                             Biaya Instalasi & Perangkat (One-Time)
                                         </h3>
                                     </div>
                                     <div>
-                                        <Label>Harga Router (Rp) *</Label>
-                                        <Input
-                                            type="number"
+                                        <Label>Harga Router *</Label>
+                                        <CurrencyInput
                                             required
-                                            min="0"
                                             value={formData.router_purchase_price}
-                                            onChange={e =>
-                                                setFormData({...formData, router_purchase_price: e.target.value})
-                                            }
+                                            onChange={value => setFormData({...formData, router_purchase_price: value})}
                                             data-testid="input-router-price"
                                         />
                                     </div>
                                     <div>
-                                        <Label>Biaya Registrasi & Instalasi (Rp) *</Label>
-                                        <Input
-                                            type="number"
+                                        <Label>Biaya Registrasi & Instalasi *</Label>
+                                        <CurrencyInput
                                             required
-                                            min="0"
                                             value={formData.registration_fee}
-                                            onChange={e => setFormData({...formData, registration_fee: e.target.value})}
+                                            onChange={value => setFormData({...formData, registration_fee: value})}
                                             data-testid="input-registration-fee"
                                         />
                                     </div>
                                     <div>
-                                        <Label>Diskon Instalasi (Rp)</Label>
-                                        <Input
-                                            type="number"
-                                            min="0"
+                                        <Label>Diskon Instalasi</Label>
+                                        <CurrencyInput
                                             value={formData.installation_discount}
-                                            onChange={e =>
-                                                setFormData({...formData, installation_discount: e.target.value})
-                                            }
+                                            onChange={value => setFormData({...formData, installation_discount: value})}
                                             data-testid="input-installation-discount"
                                         />
                                     </div>
                                     <div>
-                                        <Label>Biaya Lain-lain (Rp)</Label>
-                                        <Input
-                                            type="number"
-                                            min="0"
+                                        <Label>Biaya Lain-lain</Label>
+                                        <CurrencyInput
                                             value={formData.other_fees}
-                                            onChange={e => setFormData({...formData, other_fees: e.target.value})}
+                                            onChange={value => setFormData({...formData, other_fees: value})}
                                             data-testid="input-other-fees"
                                         />
                                     </div>
-                                    {/* ========== END NEW FIELDS ========== */}
 
                                     <div className="col-span-2">
                                         <Label>Catatan</Label>
@@ -437,6 +433,7 @@ export const Customers = () => {
                                         <TableHead>Nama</TableHead>
                                         <TableHead>Paket</TableHead>
                                         <TableHead>WiFi ID</TableHead>
+                                        <TableHead>No. WhatsApp</TableHead>
                                         <TableHead>Jatuh Tempo</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Aksi</TableHead>
@@ -449,6 +446,9 @@ export const Customers = () => {
                                             <TableCell className="font-semibold">{customer.name}</TableCell>
                                             <TableCell>{customer.package}</TableCell>
                                             <TableCell className="font-mono text-sm">{customer.wifi_id}</TableCell>
+                                            <TableCell className="font-mono text-sm">
+                                                {formatPhoneDisplay(customer.phone_whatsapp)}
+                                            </TableCell>
                                             <TableCell>
                                                 {new Date(customer.next_due_date).toLocaleDateString("id-ID")}
                                             </TableCell>

@@ -1,8 +1,11 @@
+// REPLACE frontend/src/pages/Dashboard.jsx dengan file ini
+// PERUBAHAN: Tambah tombol Mark as Paid & Remove dari overdue list
+
 import React, {useEffect, useState} from "react";
 import axios from "axios";
 import {Card, CardContent, CardHeader, CardTitle} from "../components/ui/card";
 import {Button} from "../components/ui/button";
-import {Users, FileText, CheckCircle, AlertTriangle, TrendingUp, Send} from "lucide-react";
+import {Users, FileText, CheckCircle, AlertTriangle, TrendingUp, Send, Check, X} from "lucide-react";
 import {toast} from "sonner";
 import {formatRupiah} from "../components/ui/currency-input";
 
@@ -13,6 +16,7 @@ export const Dashboard = () => {
     const [stats, setStats] = useState(null);
     const [overdueList, setOverdueList] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [processingIds, setProcessingIds] = useState(new Set());
 
     useEffect(() => {
         fetchDashboardData();
@@ -36,13 +40,55 @@ export const Dashboard = () => {
         }
     };
 
+    const handleMarkAsPaid = async invoiceId => {
+        try {
+            setProcessingIds(prev => new Set(prev).add(invoiceId));
+
+            await axios.patch(`${API}/invoices/${invoiceId}/mark-paid`, {
+                payment_method: "cash",
+                payment_received_date: new Date().toISOString(),
+                received_by: "admin"
+            });
+
+            toast.success("Invoice berhasil ditandai sebagai lunas!");
+
+            // Remove from overdue list immediately
+            setOverdueList(prev => prev.filter(item => item.id !== invoiceId));
+
+            // Refresh stats
+            const statsRes = await axios.get(`${API}/dashboard/stats`);
+            setStats(statsRes.data);
+        } catch (error) {
+            toast.error(error.response?.data?.error || "Gagal mark as paid");
+        } finally {
+            setProcessingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(invoiceId);
+                return newSet;
+            });
+        }
+    };
+
+    const handleRemoveFromList = invoiceId => {
+        // Just remove from UI, tidak mark as paid
+        setOverdueList(prev => prev.filter(item => item.id !== invoiceId));
+        toast.success("Item dihapus dari daftar");
+    };
+
     const handleSendReminder = async invoiceId => {
         try {
+            setProcessingIds(prev => new Set(prev).add(invoiceId));
             await axios.post(`${API}/invoices/send/${invoiceId}`);
             toast.success("Reminder berhasil dikirim");
             fetchDashboardData();
         } catch (error) {
             toast.error("Gagal mengirim reminder");
+        } finally {
+            setProcessingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(invoiceId);
+                return newSet;
+            });
         }
     };
 
@@ -136,7 +182,7 @@ export const Dashboard = () => {
                 </CardContent>
             </Card>
 
-            {/* Overdue List */}
+            {/* Overdue List - WITH MARK AS PAID & REMOVE BUTTONS */}
             {overdueList.length > 0 && (
                 <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-rose-200" data-testid="overdue-list">
                     <CardHeader>
@@ -157,17 +203,56 @@ export const Dashboard = () => {
                                         <p className="text-sm text-slate-600">Invoice: {item.invoice_number}</p>
                                         <p className="text-sm text-rose-600">Jatuh tempo: {item.due_date}</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex flex-col gap-2">
                                         <p className="font-bold text-slate-800">{formatRupiah(item.amount)}</p>
-                                        <Button
-                                            size="sm"
-                                            className="mt-2 bg-rose-600 hover:bg-rose-700"
-                                            onClick={() => handleSendReminder(item.id)}
-                                            data-testid={`send-reminder-${item.id}`}
-                                        >
-                                            <Send size={14} className="mr-1" />
-                                            Kirim Reminder
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            {/* Mark as Paid Button */}
+                                            <Button
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700"
+                                                onClick={() => handleMarkAsPaid(item.id)}
+                                                disabled={processingIds.has(item.id)}
+                                                data-testid={`mark-paid-${item.id}`}
+                                            >
+                                                {processingIds.has(item.id) ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                                ) : (
+                                                    <>
+                                                        <Check size={14} className="mr-1" />
+                                                        Lunas
+                                                    </>
+                                                )}
+                                            </Button>
+
+                                            {/* Remove from List Button */}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="text-slate-600 hover:text-slate-800"
+                                                onClick={() => handleRemoveFromList(item.id)}
+                                                data-testid={`remove-${item.id}`}
+                                            >
+                                                <X size={14} />
+                                            </Button>
+
+                                            {/* Send Reminder Button */}
+                                            <Button
+                                                size="sm"
+                                                className="bg-rose-600 hover:bg-rose-700"
+                                                onClick={() => handleSendReminder(item.id)}
+                                                disabled={processingIds.has(item.id)}
+                                                data-testid={`send-reminder-${item.id}`}
+                                            >
+                                                {processingIds.has(item.id) ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                                ) : (
+                                                    <>
+                                                        <Send size={14} className="mr-1" />
+                                                        Reminder
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
