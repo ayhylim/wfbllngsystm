@@ -9,7 +9,9 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "../
 import {Badge} from "../components/ui/badge";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../components/ui/select";
 import {toast} from "sonner";
-import {Plus, Download, Send, FileText, Users, Loader2} from "lucide-react";
+import {Plus, Download, Send, FileText, Users, Loader2, Search, Filter, X} from "lucide-react";
+import {Checkbox} from "../components/ui/checkbox";
+import {CurrencyInput, formatRupiah} from "../components/ui/currency-input";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
 const API = `${BACKEND_URL}/api`;
@@ -22,13 +24,29 @@ export const Invoices = () => {
     const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(false);
+
+    // ========== SEARCH & FILTER STATES ==========
+    const [searchQuery, setSearchQuery] = useState("");
+    const [filterStatus, setFilterStatus] = useState("");
+    const [filterPaymentMethod, setFilterPaymentMethod] = useState("");
+    const [filterDateFrom, setFilterDateFrom] = useState("");
+    const [filterDateTo, setFilterDateTo] = useState("");
+    const [showFilters, setShowFilters] = useState(false);
+
     const [formData, setFormData] = useState({
         customer_id: "",
         template_id: "",
         amount: "",
         due_date: "",
-        send_whatsapp: false
+        send_whatsapp: false,
+        payment_method: "",
+        payment_received_date: "",
+        received_by: "",
+        notes: "",
+        include_router_cost: false,
+        include_installation_cost: false
     });
+
     const [bulkFormData, setBulkFormData] = useState({
         customer_ids: [],
         template_id: "",
@@ -40,12 +58,20 @@ export const Invoices = () => {
         fetchInvoices();
         fetchCustomers();
         fetchTemplates();
-    }, []);
+    }, [searchQuery, filterStatus, filterPaymentMethod, filterDateFrom, filterDateTo]);
 
     const fetchInvoices = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${API}/invoices`);
+            const params = new URLSearchParams();
+
+            if (searchQuery) params.append("q", searchQuery);
+            if (filterStatus) params.append("status", filterStatus);
+            if (filterPaymentMethod) params.append("payment_method", filterPaymentMethod);
+            if (filterDateFrom) params.append("date_from", filterDateFrom);
+            if (filterDateTo) params.append("date_to", filterDateTo);
+
+            const response = await axios.get(`${API}/invoices?${params.toString()}`);
             setInvoices(response.data.data || []);
             console.log(`✅ Loaded ${response.data.data.length} invoices`);
         } catch (error) {
@@ -74,6 +100,14 @@ export const Invoices = () => {
         }
     };
 
+    const clearFilters = () => {
+        setSearchQuery("");
+        setFilterStatus("");
+        setFilterPaymentMethod("");
+        setFilterDateFrom("");
+        setFilterDateTo("");
+    };
+
     const handleGenerate = async e => {
         e.preventDefault();
         setGenerating(true);
@@ -82,7 +116,7 @@ export const Invoices = () => {
 
         try {
             const response = await axios.post(`${API}/invoices/generate`, formData, {
-                timeout: 60000 // 60 seconds timeout
+                timeout: 60000
             });
 
             toast.success(`Invoice ${response.data.data.invoice_number} berhasil dibuat!`, {
@@ -131,7 +165,7 @@ export const Invoices = () => {
 
         try {
             const response = await axios.post(`${API}/invoices/bulk-send`, bulkFormData, {
-                timeout: 120000 // 2 minutes
+                timeout: 120000
             });
             const success = response.data.results.filter(r => r.success).length;
             toast.success(`${success} invoice berhasil dikirim!`, {id: toastId});
@@ -169,7 +203,13 @@ export const Invoices = () => {
             template_id: "",
             amount: "",
             due_date: "",
-            send_whatsapp: false
+            send_whatsapp: false,
+            payment_method: "",
+            payment_received_date: "",
+            received_by: "",
+            notes: "",
+            include_router_cost: false,
+            include_installation_cost: false
         });
     };
 
@@ -226,12 +266,11 @@ export const Invoices = () => {
                                     <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
                                         {customers.map(customer => (
                                             <div key={customer._id} className="flex items-center gap-2">
-                                                <input
-                                                    type="checkbox"
+                                                <Checkbox
                                                     id={`bulk-${customer._id}`}
                                                     checked={bulkFormData.customer_ids.includes(customer._id)}
-                                                    onChange={e => {
-                                                        if (e.target.checked) {
+                                                    onCheckedChange={checked => {
+                                                        if (checked) {
                                                             setBulkFormData({
                                                                 ...bulkFormData,
                                                                 customer_ids: [
@@ -248,7 +287,6 @@ export const Invoices = () => {
                                                             });
                                                         }
                                                     }}
-                                                    data-testid={`bulk-checkbox-${customer._id}`}
                                                 />
                                                 <label
                                                     htmlFor={`bulk-${customer._id}`}
@@ -315,7 +353,10 @@ export const Invoices = () => {
                                 Generate Invoice
                             </Button>
                         </DialogTrigger>
-                        <DialogContent data-testid="invoice-form-dialog">
+                        <DialogContent
+                            className="max-w-2xl max-h-[90vh] overflow-y-auto"
+                            data-testid="invoice-form-dialog"
+                        >
                             <DialogHeader>
                                 <DialogTitle>Generate Invoice Baru</DialogTitle>
                             </DialogHeader>
@@ -339,26 +380,9 @@ export const Invoices = () => {
                                         </SelectContent>
                                     </Select>
                                 </div>
+
                                 <div>
-                                    <Label>Template (Optional)</Label>
-                                    <Select
-                                        value={formData.template_id}
-                                        onValueChange={value => setFormData({...formData, template_id: value})}
-                                    >
-                                        <SelectTrigger data-testid="select-template">
-                                            <SelectValue placeholder="Default template" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {templates.map(template => (
-                                                <SelectItem key={template._id} value={template._id}>
-                                                    {template.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label>Jumlah Tagihan (Rp) *</Label>
+                                    <Label>Jumlah Tagihan Bulanan (Rp) *</Label>
                                     <Input
                                         type="number"
                                         required
@@ -367,26 +391,112 @@ export const Invoices = () => {
                                         data-testid="input-amount"
                                     />
                                 </div>
+
                                 <div>
-                                    <Label>Tanggal Jatuh Tempo *</Label>
+                                    <Label>Tanggal Jatuh Tempo</Label>
                                     <Input
                                         type="date"
-                                        required
                                         value={formData.due_date}
                                         onChange={e => setFormData({...formData, due_date: e.target.value})}
+                                        placeholder="Kosongkan untuk ambil dari data pelanggan"
                                         data-testid="input-due-date"
                                     />
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Kosongkan untuk otomatis menggunakan tanggal jatuh tempo dari data pelanggan
+                                    </p>
                                 </div>
+
+                                {/* ========== NEW: One-Time Costs ========== */}
+                                <div className="border-t pt-4">
+                                    <h3 className="font-semibold text-slate-800 mb-3">Biaya Tambahan (Opsional)</h3>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                id="include_router"
+                                                checked={formData.include_router_cost}
+                                                onCheckedChange={checked =>
+                                                    setFormData({...formData, include_router_cost: checked})
+                                                }
+                                            />
+                                            <label htmlFor="include_router" className="text-sm cursor-pointer">
+                                                Sertakan biaya router dalam invoice ini
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                id="include_installation"
+                                                checked={formData.include_installation_cost}
+                                                onCheckedChange={checked =>
+                                                    setFormData({...formData, include_installation_cost: checked})
+                                                }
+                                            />
+                                            <label htmlFor="include_installation" className="text-sm cursor-pointer">
+                                                Sertakan biaya instalasi & registrasi dalam invoice ini
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ========== NEW: Payment Details ========== */}
+                                <div className="border-t pt-4">
+                                    <h3 className="font-semibold text-slate-800 mb-3">Detail Pembayaran (Opsional)</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <Label>Metode Pembayaran</Label>
+                                            <Select
+                                                value={formData.payment_method}
+                                                onValueChange={value =>
+                                                    setFormData({...formData, payment_method: value})
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Pilih metode" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="cash">Cash</SelectItem>
+                                                    <SelectItem value="transfer">Transfer</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label>Tanggal Pembayaran Diterima</Label>
+                                            <Input
+                                                type="date"
+                                                value={formData.payment_received_date}
+                                                onChange={e =>
+                                                    setFormData({...formData, payment_received_date: e.target.value})
+                                                }
+                                            />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <Label>Diterima Oleh</Label>
+                                            <Input
+                                                value={formData.received_by}
+                                                onChange={e => setFormData({...formData, received_by: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ========== NEW: Notes ========== */}
+                                <div>
+                                    <Label>Catatan (Footer PDF)</Label>
+                                    <Input
+                                        value={formData.notes}
+                                        onChange={e => setFormData({...formData, notes: e.target.value})}
+                                        placeholder="Catatan tambahan untuk invoice"
+                                    />
+                                </div>
+
                                 <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
+                                    <Checkbox
                                         id="send_whatsapp"
                                         checked={formData.send_whatsapp}
-                                        onChange={e => setFormData({...formData, send_whatsapp: e.target.checked})}
-                                        data-testid="checkbox-send-wa"
+                                        onCheckedChange={checked => setFormData({...formData, send_whatsapp: checked})}
                                     />
                                     <Label htmlFor="send_whatsapp">Kirim via WhatsApp setelah generate</Label>
                                 </div>
+
                                 <Button
                                     type="submit"
                                     className="w-full"
@@ -408,6 +518,86 @@ export const Invoices = () => {
                 </div>
             </div>
 
+            {/* ========== SEARCH & FILTERS ========== */}
+            <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-sky-200">
+                <CardContent className="pt-6 space-y-4">
+                    <div className="flex gap-3">
+                        <div className="relative flex-1">
+                            <Search
+                                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
+                                size={20}
+                            />
+                            <Input
+                                placeholder="Cari invoice (no. invoice, no. bukti, nama pelanggan)..."
+                                className="pl-10"
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                data-testid="search-input"
+                            />
+                        </div>
+                        <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="gap-2">
+                            <Filter size={16} />
+                            {showFilters ? "Hide" : "Show"} Filters
+                        </Button>
+                        {(searchQuery || filterStatus || filterPaymentMethod || filterDateFrom || filterDateTo) && (
+                            <Button variant="outline" onClick={clearFilters} className="gap-2">
+                                <X size={16} />
+                                Clear
+                            </Button>
+                        )}
+                    </div>
+
+                    {showFilters && (
+                        <div className="grid grid-cols-4 gap-4 pt-4 border-t">
+                            <div>
+                                <Label>Status</Label>
+                                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Semua status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">Semua</SelectItem>
+                                        <SelectItem value="draft">Draft</SelectItem>
+                                        <SelectItem value="sent">Sent</SelectItem>
+                                        <SelectItem value="paid">Paid</SelectItem>
+                                        <SelectItem value="overdue">Overdue</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Metode Pembayaran</Label>
+                                <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Semua metode" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">Semua</SelectItem>
+                                        <SelectItem value="cash">Cash</SelectItem>
+                                        <SelectItem value="transfer">Transfer</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Dari Tanggal</Label>
+                                <Input
+                                    type="date"
+                                    value={filterDateFrom}
+                                    onChange={e => setFilterDateFrom(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <Label>Sampai Tanggal</Label>
+                                <Input
+                                    type="date"
+                                    value={filterDateTo}
+                                    onChange={e => setFilterDateTo(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             {/* Invoices Table */}
             <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-sky-200">
                 <CardHeader>
@@ -427,24 +617,35 @@ export const Invoices = () => {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Nomor Invoice</TableHead>
+                                        <TableHead>No. Invoice</TableHead>
+                                        <TableHead>No. Bukti</TableHead>
                                         <TableHead>Customer</TableHead>
                                         <TableHead>Jumlah</TableHead>
+                                        <TableHead>Metode</TableHead>
                                         <TableHead>Jatuh Tempo</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead>Dibuat</TableHead>
                                         <TableHead>Aksi</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {invoices.map(invoice => (
                                         <TableRow key={invoice._id} data-testid={`invoice-row-${invoice._id}`}>
-                                            <TableCell className="font-mono text-sm font-semibold">
+                                            <TableCell className="font-mono text-xs font-semibold">
                                                 {invoice.invoice_number}
+                                            </TableCell>
+                                            <TableCell className="font-mono text-xs text-slate-600">
+                                                {invoice.payment_receipt_number}
                                             </TableCell>
                                             <TableCell>{invoice.customer_name}</TableCell>
                                             <TableCell className="font-semibold">
                                                 Rp {invoice.total_amount.toLocaleString("id-ID")}
+                                            </TableCell>
+                                            <TableCell>
+                                                {invoice.payment_method ? (
+                                                    <Badge variant="outline">{invoice.payment_method}</Badge>
+                                                ) : (
+                                                    <span className="text-slate-400 text-xs">-</span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 {new Date(invoice.due_date).toLocaleDateString("id-ID")}
@@ -453,9 +654,6 @@ export const Invoices = () => {
                                                 <Badge className={getStatusColor(invoice.status)}>
                                                     {invoice.status}
                                                 </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-sm text-slate-600">
-                                                {new Date(invoice.createdAt).toLocaleDateString("id-ID")}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
@@ -487,7 +685,13 @@ export const Invoices = () => {
                             </Table>
                             {invoices.length === 0 && !loading && (
                                 <div className="text-center py-8 text-slate-500">
-                                    Belum ada invoice. Generate invoice baru untuk memulai.
+                                    {searchQuery ||
+                                    filterStatus ||
+                                    filterPaymentMethod ||
+                                    filterDateFrom ||
+                                    filterDateTo
+                                        ? "Tidak ada invoice yang sesuai dengan filter"
+                                        : "Belum ada invoice. Generate invoice baru untuk memulai."}
                                 </div>
                             )}
                         </div>

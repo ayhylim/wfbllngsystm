@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {customAlphabet} from "nanoid";
+
+// Generate numeric-only nanoid for customer_id
+const nanoid = customAlphabet("0123456789", 10);
 
 const customerSchema = new mongoose.Schema(
     {
@@ -7,7 +11,8 @@ const customerSchema = new mongoose.Schema(
             required: true,
             unique: true,
             trim: true,
-            index: true
+            index: true,
+            default: () => nanoid() // Auto-generate 10-digit numeric ID
         },
         name: {
             type: String,
@@ -32,15 +37,58 @@ const customerSchema = new mongoose.Schema(
             trim: true,
             index: true
         },
-        start_date: {
-            type: Date,
-            required: true
+
+        // ========== NEW FIELDS ==========
+
+        // ONE-TIME Costs
+        router_purchase_price: {
+            type: Number,
+            required: true,
+            default: 0,
+            min: 0
         },
+        registration_fee: {
+            type: Number,
+            required: true,
+            default: 0,
+            min: 0
+        },
+        installation_discount: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        other_fees: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+
+        // Subscription Period
+        subscription_start_date: {
+            type: Date,
+            required: true,
+            index: true
+        },
+
+        // Billing Info
         next_due_date: {
             type: Date,
             required: true,
             index: true
         },
+        last_payment_date: {
+            type: Date,
+            default: null,
+            index: true
+        },
+        last_payment_amount: {
+            type: Number,
+            default: 0
+        },
+
+        // ========== END NEW FIELDS ==========
+
         phone_whatsapp: {
             type: String,
             required: true,
@@ -58,6 +106,8 @@ const customerSchema = new mongoose.Schema(
             default: "",
             trim: true
         },
+
+        // Financial Tracking
         total_paid: {
             type: Number,
             default: 0
@@ -66,21 +116,17 @@ const customerSchema = new mongoose.Schema(
             type: Number,
             default: 0
         },
-        last_payment_date: {
-            type: Date,
-            default: null
-        },
         last_invoice_date: {
             type: Date,
             default: null
         },
-        // Untuk multi-user di future (Google Auth)
+
+        // Metadata
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             default: null
         },
-        // Metadata
         created_by: {
             type: String,
             default: "admin"

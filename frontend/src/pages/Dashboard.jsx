@@ -4,6 +4,7 @@ import {Card, CardContent, CardHeader, CardTitle} from "../components/ui/card";
 import {Button} from "../components/ui/button";
 import {Users, FileText, CheckCircle, AlertTriangle, TrendingUp, Send} from "lucide-react";
 import {toast} from "sonner";
+import {formatRupiah} from "../components/ui/currency-input";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
 const API = `${BACKEND_URL}/api`;
@@ -129,7 +130,7 @@ export const Dashboard = () => {
                 </CardHeader>
                 <CardContent>
                     <div className="text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                        Rp {(stats?.revenue || 0).toLocaleString("id-ID")}
+                        {formatRupiah(stats?.revenue || 0)}
                     </div>
                     <p className="text-sm text-slate-600 mt-2">Dari invoice yang sudah dibayar</p>
                 </CardContent>
@@ -157,9 +158,7 @@ export const Dashboard = () => {
                                         <p className="text-sm text-rose-600">Jatuh tempo: {item.due_date}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-slate-800">
-                                            Rp {item.amount.toLocaleString("id-ID")}
-                                        </p>
+                                        <p className="font-bold text-slate-800">{formatRupiah(item.amount)}</p>
                                         <Button
                                             size="sm"
                                             className="mt-2 bg-rose-600 hover:bg-rose-700"

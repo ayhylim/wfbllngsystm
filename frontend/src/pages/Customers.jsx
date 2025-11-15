@@ -11,6 +11,7 @@ import {toast} from "sonner";
 import {Plus, Search, Upload, Edit, Trash2} from "lucide-react";
 import {Textarea} from "../components/ui/textarea";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../components/ui/select";
+import {CurrencyInput, formatRupiah} from "../components/ui/currency-input";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
 const API = `${BACKEND_URL}/api`;
@@ -23,16 +24,19 @@ export const Customers = () => {
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [formData, setFormData] = useState({
-        customer_id: "",
         name: "",
         address: "",
         package: "",
-        start_date: "",
+        subscription_start_date: "",
         next_due_date: "",
         phone_whatsapp: "",
         wifi_id: "",
         status: "active",
-        notes: ""
+        notes: "",
+        router_purchase_price: "",
+        registration_fee: "",
+        installation_discount: "",
+        other_fees: ""
     });
 
     useEffect(() => {
@@ -90,16 +94,19 @@ export const Customers = () => {
     const handleEdit = customer => {
         setEditingCustomer(customer);
         setFormData({
-            customer_id: customer.customer_id,
             name: customer.name,
             address: customer.address,
             package: customer.package,
-            start_date: customer.start_date?.split("T")[0] || "",
+            subscription_start_date: customer.subscription_start_date?.split("T")[0] || "",
             next_due_date: customer.next_due_date?.split("T")[0] || "",
             phone_whatsapp: customer.phone_whatsapp,
             wifi_id: customer.wifi_id,
             status: customer.status,
-            notes: customer.notes || ""
+            notes: customer.notes || "",
+            router_purchase_price: customer.router_purchase_price || "",
+            registration_fee: customer.registration_fee || "",
+            installation_discount: customer.installation_discount || "",
+            other_fees: customer.other_fees || ""
         });
         setDialogOpen(true);
     };
@@ -107,16 +114,19 @@ export const Customers = () => {
     const resetForm = () => {
         setEditingCustomer(null);
         setFormData({
-            customer_id: "",
             name: "",
             address: "",
             package: "",
-            start_date: "",
+            subscription_start_date: "",
             next_due_date: "",
             phone_whatsapp: "",
             wifi_id: "",
             status: "active",
-            notes: ""
+            notes: "",
+            router_purchase_price: "",
+            registration_fee: "",
+            installation_discount: "",
+            other_fees: ""
         });
     };
 
@@ -167,8 +177,9 @@ export const Customers = () => {
                             </DialogHeader>
                             <div className="space-y-4">
                                 <p className="text-sm text-slate-600">
-                                    Upload file CSV atau Excel dengan kolom: customer_id, name, address, package,
-                                    start_date, next_due_date, phone_whatsapp, wifi_id
+                                    Upload file CSV atau Excel dengan kolom: name, address, package, wifi_id,
+                                    subscription_start_date, next_due_date, phone_whatsapp, router_purchase_price,
+                                    registration_fee
                                 </p>
                                 <Input
                                     type="file"
@@ -198,7 +209,7 @@ export const Customers = () => {
                             </Button>
                         </DialogTrigger>
                         <DialogContent
-                            className="max-w-2xl max-h-[90vh] overflow-y-auto"
+                            className="max-w-3xl max-h-[90vh] overflow-y-auto"
                             data-testid="customer-form-dialog"
                         >
                             <DialogHeader>
@@ -207,17 +218,25 @@ export const Customers = () => {
                                 </DialogTitle>
                             </DialogHeader>
                             <form onSubmit={handleSubmit} className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label>ID Pelanggan *</Label>
-                                        <Input
-                                            required
-                                            value={formData.customer_id}
-                                            onChange={e => setFormData({...formData, customer_id: e.target.value})}
-                                            data-testid="input-customer-id"
-                                        />
+                                {editingCustomer && (
+                                    <div className="bg-sky-50 border border-sky-200 rounded-lg p-3">
+                                        <p className="text-sm text-sky-800">
+                                            <strong>ID Pelanggan:</strong> {editingCustomer.customer_id}
+                                        </p>
+                                        {editingCustomer.last_payment_date && (
+                                            <p className="text-sm text-sky-800 mt-1">
+                                                <strong>Pembayaran Terakhir:</strong>{" "}
+                                                {new Date(editingCustomer.last_payment_date).toLocaleDateString(
+                                                    "id-ID"
+                                                )}{" "}
+                                                - Rp {editingCustomer.last_payment_amount?.toLocaleString("id-ID")}
+                                            </p>
+                                        )}
                                     </div>
-                                    <div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2">
                                         <Label>Nama Lengkap *</Label>
                                         <Input
                                             required
@@ -255,13 +274,15 @@ export const Customers = () => {
                                         />
                                     </div>
                                     <div>
-                                        <Label>Tanggal Mulai *</Label>
+                                        <Label>Tanggal Mulai Langganan *</Label>
                                         <Input
                                             type="date"
                                             required
-                                            value={formData.start_date}
-                                            onChange={e => setFormData({...formData, start_date: e.target.value})}
-                                            data-testid="input-start-date"
+                                            value={formData.subscription_start_date}
+                                            onChange={e =>
+                                                setFormData({...formData, subscription_start_date: e.target.value})
+                                            }
+                                            data-testid="input-subscription-start"
                                         />
                                     </div>
                                     <div>
@@ -300,6 +321,61 @@ export const Customers = () => {
                                             </SelectContent>
                                         </Select>
                                     </div>
+
+                                    {/* ========== NEW FIELDS ========== */}
+                                    <div className="col-span-2 border-t pt-4 mt-2">
+                                        <h3 className="font-semibold text-slate-800 mb-3">
+                                            Biaya Instalasi & Perangkat (One-Time)
+                                        </h3>
+                                    </div>
+                                    <div>
+                                        <Label>Harga Router (Rp) *</Label>
+                                        <Input
+                                            type="number"
+                                            required
+                                            min="0"
+                                            value={formData.router_purchase_price}
+                                            onChange={e =>
+                                                setFormData({...formData, router_purchase_price: e.target.value})
+                                            }
+                                            data-testid="input-router-price"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Biaya Registrasi & Instalasi (Rp) *</Label>
+                                        <Input
+                                            type="number"
+                                            required
+                                            min="0"
+                                            value={formData.registration_fee}
+                                            onChange={e => setFormData({...formData, registration_fee: e.target.value})}
+                                            data-testid="input-registration-fee"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Diskon Instalasi (Rp)</Label>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            value={formData.installation_discount}
+                                            onChange={e =>
+                                                setFormData({...formData, installation_discount: e.target.value})
+                                            }
+                                            data-testid="input-installation-discount"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Biaya Lain-lain (Rp)</Label>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            value={formData.other_fees}
+                                            onChange={e => setFormData({...formData, other_fees: e.target.value})}
+                                            data-testid="input-other-fees"
+                                        />
+                                    </div>
+                                    {/* ========== END NEW FIELDS ========== */}
+
                                     <div className="col-span-2">
                                         <Label>Catatan</Label>
                                         <Textarea
@@ -361,7 +437,6 @@ export const Customers = () => {
                                         <TableHead>Nama</TableHead>
                                         <TableHead>Paket</TableHead>
                                         <TableHead>WiFi ID</TableHead>
-                                        <TableHead>No. WA</TableHead>
                                         <TableHead>Jatuh Tempo</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Aksi</TableHead>
@@ -374,7 +449,6 @@ export const Customers = () => {
                                             <TableCell className="font-semibold">{customer.name}</TableCell>
                                             <TableCell>{customer.package}</TableCell>
                                             <TableCell className="font-mono text-sm">{customer.wifi_id}</TableCell>
-                                            <TableCell>{customer.phone_whatsapp}</TableCell>
                                             <TableCell>
                                                 {new Date(customer.next_due_date).toLocaleDateString("id-ID")}
                                             </TableCell>
