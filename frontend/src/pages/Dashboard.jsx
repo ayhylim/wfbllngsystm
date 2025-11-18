@@ -138,7 +138,8 @@ export const Dashboard = () => {
                     </CardContent>
                 </Card>
 
-                <Card
+{/* Invoice Lunas */}
+                {/* <Card
                     className="bg-gradient-to-br from-amber-500 to-orange-600 text-white border-0 shadow-lg hover:shadow-xl transition-shadow"
                     data-testid="stat-card-paid"
                 >
@@ -150,7 +151,7 @@ export const Dashboard = () => {
                         <div className="text-3xl font-bold">{stats?.invoices?.paid || 0}</div>
                         <p className="text-xs opacity-80 mt-1">Sudah dibayar</p>
                     </CardContent>
-                </Card>
+                </Card> */}
 
                 <Card
                     className="bg-gradient-to-br from-rose-500 to-red-600 text-white border-0 shadow-lg hover:shadow-xl transition-shadow"
@@ -168,7 +169,7 @@ export const Dashboard = () => {
             </div>
 
             {/* Revenue Card */}
-            <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-sky-200" data-testid="revenue-card">
+            {/* <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-sky-200" data-testid="revenue-card">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-slate-800">
                         <TrendingUp className="text-green-600" />
@@ -181,7 +182,7 @@ export const Dashboard = () => {
                     </div>
                     <p className="text-sm text-slate-600 mt-2">Dari invoice yang sudah dibayar</p>
                 </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Overdue List - WITH WORKING BUTTONS */}
             {overdueList.length > 0 && (

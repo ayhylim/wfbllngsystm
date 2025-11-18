@@ -1,9 +1,10 @@
+// backend/middleware/auth.js - UPDATED FOR MULTI-TENANCY
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
 
-// ========== VERIFY JWT TOKEN ==========
+// ========== VERIFY JWT TOKEN + ADD USER_ID TO REQUEST ==========
 export const authenticateToken = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -22,13 +23,16 @@ export const authenticateToken = async (req, res, next) => {
             return res.status(401).json({error: "User not found or inactive"});
         }
 
-        // Attach user to request
+        // ⭐ CRITICAL: Attach user data to request for multi-tenancy
         req.user = {
             id: user._id,
             email: user.email,
             name: user.name,
             role: user.role
         };
+
+        // ⭐ NEW: Add user_id to request for easy filtering
+        req.userId = user._id.toString();
 
         next();
     } catch (error) {
@@ -38,6 +42,22 @@ export const authenticateToken = async (req, res, next) => {
             details: error.message
         });
     }
+};
+
+// ========== MULTI-TENANT QUERY HELPER ==========
+// Helper function to add user_id filter to all queries
+export const getTenantFilter = req => {
+    return {user_id: req.userId};
+};
+
+// Helper to add user_id to document before saving
+export const addTenantData = (req, data) => {
+    return {
+        ...data,
+        user_id: req.userId,
+        created_by: req.user.email || "admin",
+        updated_by: req.user.email || "admin"
+    };
 };
 
 // ========== ROLE-BASED ACCESS ==========
@@ -76,6 +96,7 @@ export const optionalAuth = async (req, res, next) => {
                     name: user.name,
                     role: user.role
                 };
+                req.userId = user._id.toString();
             }
         }
     } catch (error) {
