@@ -1,0 +1,72 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 40px; }
+        .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+        .company { font-size: 24px; font-weight: bold; color: #1e40af; }
+        .invoice-title { font-size: 32px; color: #2563eb; margin-top: 10px; }
+        .info-section { margin-top: 30px; }
+        .info-row { display: flex; justify-content: space-between; margin: 10px 0; }
+        .label { font-weight: bold; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        .table th, .table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        .table th { background-color: #2563eb; color: white; }
+        .total { font-size: 20px; font-weight: bold; text-align: right; margin-top: 20px; }
+        .footer { margin-top: 50px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class='header'>
+        <div class='company'>WiFi Billing System</div>
+        <div class='invoice-title'>INVOICE</div>
+    </div>
+    
+    <div class='info-section'>
+        <div class='info-row'>
+            <div><span class='label'>Nomor Invoice:</span> INV-20251112-8A823417</div>
+            <div><span class='label'>Tanggal:</span> 12/11/2025</div>
+        </div>
+        <div class='info-row'>
+            <div><span class='label'>Jatuh Tempo:</span> 2025-11-12</div>
+        </div>
+    </div>
+    
+    <div class='info-section'>
+        <h3>Pelanggan:</h3>
+        <div><span class='label'>Nama:</span> fachlepy</div>
+        <div><span class='label'>ID Pelanggan:</span> 1</div>
+        <div><span class='label'>Alamat:</span> jl pejuang</div>
+        <div><span class='label'>WiFi ID:</span> 123</div>
+    </div>
+    
+    <table class='table'>
+        <thead>
+            <tr>
+                <th>Deskripsi</th>
+                <th>Paket</th>
+                <th>Jumlah</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Tagihan WiFi Bulanan</td>
+                <td>premium 100mbps</td>
+                <td>Rp 1</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class='total'>
+        Total: Rp 1
+    </div>
+    
+    <div class='footer'>
+        <p>Terima kasih atas kepercayaan Anda!</p>
+        <p>Untuk pertanyaan, hubungi customer service kami.</p>
+    </div>
+</body>
+</html>
+            
