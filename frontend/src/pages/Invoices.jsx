@@ -161,19 +161,19 @@ export const Invoices = () => {
     const handleEdit = invoice => {
         setEditingInvoice(invoice);
         setEditFormData({
-            customer_id: invoice.customer_id?._id || invoice.customer_id,
-            amount: invoice.amount,
-            router_cost: invoice.router_cost || 0,
-            installation_cost: invoice.installation_cost || 0,
-            other_fees: invoice.other_fees || 0,
-            installation_discount: invoice.installation_discount || 0,
-            tax: invoice.tax || 0,
-            status: invoice.status,
-            due_date: invoice.due_date?.split("T")[0] || "",
-            payment_received_date: invoice.payment_received_date?.split("T")[0] || "",
-            payment_method: invoice.payment_method || "",
-            received_by: invoice.received_by || "",
-            notes: invoice.notes || ""
+            customer_id: invoice.customer_id?._id || invoice.customer_id || "", // ✅ FIXED
+            amount: invoice.amount || "", // ✅ FIXED: Add fallback
+            router_cost: invoice.router_cost || "", // ✅ FIXED
+            installation_cost: invoice.installation_cost || "", // ✅ FIXED
+            other_fees: invoice.other_fees || "", // ✅ FIXED
+            installation_discount: invoice.installation_discount || "", // ✅ FIXED
+            tax: invoice.tax || "", // ✅ FIXED
+            status: invoice.status || "draft", // ✅ FIXED: Default to "draft" if undefined
+            due_date: invoice.due_date?.split("T")[0] || "", // ✅ Already good
+            payment_received_date: invoice.payment_received_date?.split("T")[0] || "", // ✅ Already good
+            payment_method: invoice.payment_method || "", // ✅ Already good
+            received_by: invoice.received_by || "", // ✅ Already good
+            notes: invoice.notes || "" // ✅ Already good
         });
         setEditDialogOpen(true);
     };
@@ -951,7 +951,7 @@ export const Invoices = () => {
                                             <SelectValue placeholder="Pilih metode" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">Tidak ada</SelectItem>
+                                            <SelectItem value="none">Tidak ada</SelectItem>
                                             <SelectItem value="cash">Cash</SelectItem>
                                             <SelectItem value="transfer">Transfer</SelectItem>
                                             <SelectItem value="check">Check</SelectItem>
