@@ -5,7 +5,6 @@ const invoiceTemplateSchema = new mongoose.Schema(
         name: {
             type: String,
             required: true,
-            unique: true,
             trim: true
         },
         subject: {
@@ -43,11 +42,12 @@ WiFi Angkasa`
             type: Boolean,
             default: true
         },
-        // Untuk multi-user di future
+        // ========== MULTI-TENANT FIELD ==========
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            default: null
+            required: true, // ← REQUIRED for multi-tenancy
+            index: true
         },
         created_by: {
             type: String,
@@ -63,6 +63,14 @@ WiFi Angkasa`
         collection: "invoice_templates"
     }
 );
+
+// ========== COMPOUND INDEX for multi-tenant uniqueness ==========
+// Template name harus unique PER USER
+invoiceTemplateSchema.index({name: 1, user_id: 1}, {unique: true});
+
+// Index untuk filtering by user
+invoiceTemplateSchema.index({user_id: 1, is_active: 1});
+invoiceTemplateSchema.index({user_id: 1, is_default: 1});
 
 const InvoiceTemplate = mongoose.model("InvoiceTemplate", invoiceTemplateSchema);
 

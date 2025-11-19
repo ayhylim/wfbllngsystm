@@ -120,7 +120,9 @@ const invoiceSchema = new mongoose.Schema(
         },
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User"
+            ref: "User",
+            required: true, // ← REQUIRED for multi-tenancy
+            index: true
         },
         created_by: {
             type: String,
@@ -137,11 +139,11 @@ const invoiceSchema = new mongoose.Schema(
     }
 );
 
-// Index untuk query yang sering
-invoiceSchema.index({customer_id: 1, createdAt: -1});
-invoiceSchema.index({status: 1, due_date: 1});
-invoiceSchema.index({invoice_number: 1});
-invoiceSchema.index({payment_receipt_number: 1});
+// ========== INDEXES for multi-tenant queries ==========
+invoiceSchema.index({user_id: 1, customer_id: 1, createdAt: -1});
+invoiceSchema.index({user_id: 1, status: 1, due_date: 1});
+invoiceSchema.index({user_id: 1, invoice_number: 1});
+invoiceSchema.index({user_id: 1, payment_receipt_number: 1});
 
 const Invoice = mongoose.model("Invoice", invoiceSchema);
 

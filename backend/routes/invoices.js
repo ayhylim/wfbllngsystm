@@ -18,11 +18,9 @@ const router = express.Router();
 
 const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || "http://localhost:8002";
 
-// Generate payment receipt number (10 digit numeric)
 const nanoid = customAlphabet("0123456789", 10);
 const generatePaymentReceiptNumber = () => nanoid();
 
-// Generate invoice number
 const generateInvoiceNumber = async () => {
     const today = new Date();
     const year = today.getFullYear();
@@ -32,14 +30,16 @@ const generateInvoiceNumber = async () => {
     return `INV-${year}${month}${day}-${random}`;
 };
 
-// GET all invoices
+// ========== GET all invoices milik user ini ==========
 router.get(
     "/",
     asyncHandler(async (req, res) => {
         try {
             const {customer_id, status, page = 1, limit = 100, start_date, end_date, q} = req.query;
 
-            const query = {};
+            const query = {
+                user_id: req.user.id // ← FILTER BY USER
+            };
 
             if (customer_id) query.customer_id = customer_id;
             if (status) query.status = status;
@@ -70,7 +70,7 @@ router.get(
 
             const total = await Invoice.countDocuments(query);
 
-            console.log(`✅ Fetched ${invoices.length} invoices`);
+            console.log(`✅ Fetched ${invoices.length} invoices for user ${req.user.email}`);
 
             res.json({
                 data: invoices,
@@ -93,7 +93,10 @@ router.get(
 router.get(
     "/:id",
     asyncHandler(async (req, res) => {
-        const invoice = await Invoice.findById(req.params.id).populate("customer_id");
+        const invoice = await Invoice.findOne({
+            _id: req.params.id,
+            user_id: req.user.id // ← SECURITY
+        }).populate("customer_id");
 
         if (!invoice) {
             return res.status(404).json({error: "Invoice tidak ditemukan"});
@@ -103,7 +106,7 @@ router.get(
     })
 );
 
-// GENERATE invoice
+// ========== GENERATE invoice ==========
 router.post(
     "/generate",
     asyncHandler(async (req, res) => {
@@ -121,7 +124,7 @@ router.post(
             include_installation_cost
         } = req.body;
 
-        console.log("📝 Generating invoice for customer:", customer_id);
+        console.log("📝 Generating invoice for customer:", customer_id, "by", req.user.email);
 
         if (!customer_id || !amount) {
             return res.status(400).json({
@@ -129,10 +132,14 @@ router.post(
             });
         }
 
-        const customer = await Customer.findById(customer_id);
+        // GET customer - CHECK if belongs to user
+        const customer = await Customer.findOne({
+            _id: customer_id,
+            user_id: req.user.id // ← SECURITY
+        });
 
         if (!customer) {
-            return res.status(404).json({error: "Customer tidak ditemukan"});
+            return res.status(404).json({error: "Customer tidak ditemukan di akun Anda"});
         }
 
         // Generate invoice number & payment receipt number
@@ -180,7 +187,9 @@ router.post(
             payment_method: payment_method || undefined,
             payment_received_date: payment_received_date ? new Date(payment_received_date) : undefined,
             received_by: received_by || undefined,
-            notes: notes || ""
+            notes: notes || "",
+            user_id: req.user.id, // ← ASSIGN TO USER
+            created_by: req.user.email
         });
 
         await newInvoice.save();
@@ -229,7 +238,7 @@ router.post(
     })
 );
 
-// UPDATE invoice (FULL EDIT)
+// ========== UPDATE invoice (FULL EDIT) ==========
 router.put(
     "/:id",
     asyncHandler(async (req, res) => {
@@ -251,7 +260,10 @@ router.put(
 
         console.log(`📝 Updating invoice: ${req.params.id}`);
 
-        const invoice = await Invoice.findById(req.params.id);
+        const invoice = await Invoice.findOne({
+            _id: req.params.id,
+            user_id: req.user.id // ← SECURITY
+        });
 
         if (!invoice) {
             return res.status(404).json({error: "Invoice tidak ditemukan"});
@@ -259,9 +271,12 @@ router.put(
 
         // Update customer if changed
         if (customer_id && customer_id !== invoice.customer_id.toString()) {
-            const customer = await Customer.findById(customer_id);
+            const customer = await Customer.findOne({
+                _id: customer_id,
+                user_id: req.user.id // ← SECURITY
+            });
             if (!customer) {
-                return res.status(404).json({error: "Customer tidak ditemukan"});
+                return res.status(404).json({error: "Customer tidak ditemukan di akun Anda"});
             }
             invoice.customer_id = customer_id;
             invoice.customer_name = customer.name;
@@ -294,7 +309,7 @@ router.put(
         if (received_by) invoice.received_by = received_by;
         if (notes !== undefined) invoice.notes = notes;
 
-        invoice.updated_by = "admin";
+        invoice.updated_by = req.user.email;
 
         await invoice.save();
 
@@ -317,7 +332,7 @@ router.put(
     })
 );
 
-// ========== MARK AS PAID - FIXED (UPDATE DATABASE) ==========
+// ========== MARK AS PAID ==========
 router.patch(
     "/:id/mark-paid",
     asyncHandler(async (req, res) => {
@@ -325,7 +340,10 @@ router.patch(
 
         console.log(`💰 Marking invoice as paid: ${req.params.id}`);
 
-        const invoice = await Invoice.findById(req.params.id);
+        const invoice = await Invoice.findOne({
+            _id: req.params.id,
+            user_id: req.user.id // ← SECURITY
+        });
 
         if (!invoice) {
             return res.status(404).json({error: "Invoice tidak ditemukan"});
@@ -336,15 +354,18 @@ router.patch(
         invoice.payment_method = payment_method || "cash";
         invoice.payment_received_date = payment_received_date ? new Date(payment_received_date) : new Date();
         invoice.received_by = received_by || "admin";
-        invoice.updated_by = "admin";
+        invoice.updated_by = req.user.email;
 
         await invoice.save();
 
         console.log(`✅ Invoice ${invoice.invoice_number} marked as paid in DATABASE`);
 
-        // OPTIONAL: Update customer's last payment info
+        // Update customer's last payment info
         try {
-            const customer = await Customer.findById(invoice.customer_id);
+            const customer = await Customer.findOne({
+                _id: invoice.customer_id,
+                user_id: req.user.id
+            });
             if (customer) {
                 customer.last_payment_date = invoice.payment_received_date;
                 customer.last_payment_amount = invoice.total_amount;
@@ -368,7 +389,10 @@ router.delete(
     asyncHandler(async (req, res) => {
         console.log(`🗑️ Deleting invoice: ${req.params.id}`);
 
-        const invoice = await Invoice.findByIdAndDelete(req.params.id);
+        const invoice = await Invoice.findOneAndDelete({
+            _id: req.params.id,
+            user_id: req.user.id // ← SECURITY
+        });
 
         if (!invoice) {
             return res.status(404).json({error: "Invoice tidak ditemukan"});
@@ -394,6 +418,16 @@ router.get(
     asyncHandler(async (req, res) => {
         const {invoice_number} = req.params;
 
+        // Verify invoice belongs to user
+        const invoice = await Invoice.findOne({
+            invoice_number,
+            user_id: req.user.id // ← SECURITY
+        });
+
+        if (!invoice) {
+            return res.status(404).json({error: "Invoice tidak ditemukan"});
+        }
+
         const pdfPath = path.join(__dirname, "..", "invoices", `${invoice_number}.pdf`);
 
         if (!fs.existsSync(pdfPath)) {
@@ -410,7 +444,10 @@ router.get(
 router.post(
     "/send/:id",
     asyncHandler(async (req, res) => {
-        const invoice = await Invoice.findById(req.params.id).populate("customer_id");
+        const invoice = await Invoice.findOne({
+            _id: req.params.id,
+            user_id: req.user.id // ← SECURITY
+        }).populate("customer_id");
 
         if (!invoice) {
             return res.status(404).json({error: "Invoice tidak ditemukan"});
@@ -452,7 +489,7 @@ router.post(
     asyncHandler(async (req, res) => {
         const {customer_ids, template_id, amount, due_date} = req.body;
 
-        console.log(`📤 Bulk sending to ${customer_ids.length} customers...`);
+        console.log(`📤 Bulk sending to ${customer_ids.length} customers by ${req.user.email}...`);
 
         if (!customer_ids || customer_ids.length === 0 || !amount || !due_date) {
             return res.status(400).json({
@@ -464,13 +501,17 @@ router.post(
 
         for (const customer_id of customer_ids) {
             try {
-                const customer = await Customer.findById(customer_id);
+                // Verify customer belongs to user
+                const customer = await Customer.findOne({
+                    _id: customer_id,
+                    user_id: req.user.id // ← SECURITY
+                });
 
                 if (!customer) {
                     results.push({
                         customer_id,
                         success: false,
-                        error: "Customer tidak ditemukan"
+                        error: "Customer tidak ditemukan di akun Anda"
                     });
                     continue;
                 }
@@ -499,7 +540,9 @@ router.post(
                     due_date: dueDateObj,
                     invoice_date: new Date(),
                     status: "draft",
-                    notes: ""
+                    notes: "",
+                    user_id: req.user.id, // ← ASSIGN TO USER
+                    created_by: req.user.email
                 });
 
                 await newInvoice.save();

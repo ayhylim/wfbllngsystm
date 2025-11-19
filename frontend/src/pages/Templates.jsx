@@ -288,9 +288,8 @@ const defaultTemplateHTML = `<!DOCTYPE html>
         <div class="header">
             <div class="company">WiFi Billing System</div>
             <div class="company-details">
-                WiFi Angkasa | Jl. Example, Bekasi
+                Kharisma Broadband | Pondok Ungu Permai, Bekasi Utara
                 <br />
-                Tel: 62812345678 | Email: info@wifiangkasa.com
             </div>
             <div class="invoice-title">INVOICE</div>
         </div>

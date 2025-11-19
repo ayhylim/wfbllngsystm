@@ -150,6 +150,9 @@ customerSchema.index({
     wifi_id: "text"
 });
 
+customerSchema.index({user_id: 1, status: 1});
+customerSchema.index({user_id: 1, createdAt: -1});
+
 const Customer = mongoose.model("Customer", customerSchema);
 
 export default Customer;
